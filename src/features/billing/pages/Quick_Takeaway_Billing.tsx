@@ -4,7 +4,6 @@ import CustomerSection from "@/components/billing/CustomerSection";
 
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { createBill } from "@/services/billService";
 import { getBranchDetails } from "@/services/branchService";
 import { saveRunningOrder } from "@/services/runningOrderService";
 
@@ -15,16 +14,14 @@ type Props = {
 };
 
 export default function NormalBilling({ step, setStep, billingType }: Props) {
-  const [search, setSearch] = useState("");
+  const search = "";
   const [selectedCategory, setSelectedCategory] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
   const [categories, setCategories] = useState<any[]>([]);
-  const [createdBill, setCreatedBill] = useState<any>(null);
   const [products, setProducts] = useState<any[]>([]);
   const { branch, user } = useAppSelector((state) => state.auth);
-  const [loading, setLoading] = useState(false);
   const filteredProducts = products.filter((product) => {
     const matchesCategory = selectedCategory
       ? product.categoryId ===
@@ -73,8 +70,6 @@ export default function NormalBilling({ step, setStep, billingType }: Props) {
         return;
       }
 
-      setLoading(true);
-
       const items = cartItems.map((item) => ({
         menuItemId: item.id,
 
@@ -113,7 +108,6 @@ export default function NormalBilling({ step, setStep, billingType }: Props) {
     } catch (error) {
       console.log(error);
     } finally {
-      setLoading(false);
     }
   };
 

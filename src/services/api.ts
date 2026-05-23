@@ -3,7 +3,7 @@ import axios from "axios";
 import { store } from "@/store";
 
 export const api = axios.create({
-  baseURL: "http://localhost:5500/api",
+  baseURL: `https://dineink-backend.onrender.com/api`,
 
   headers: {
     "Content-Type": "application/json",

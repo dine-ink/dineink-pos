@@ -22,7 +22,7 @@ export default function DineIn({
   selectedTable,
   setSelectedTable,
 }: Props) {
-  const [search, setSearch] = useState("");
+  const search = "";
   const [selectedCategory, setSelectedCategory] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");

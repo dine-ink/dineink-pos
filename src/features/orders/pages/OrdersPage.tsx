@@ -14,7 +14,7 @@ export default function OrderHistory() {
   const fetchOrders = async () => {
     try {
       const res = await fetch(
-        `http://localhost:5500/api/bills/${user.restaurantId}/${user.branchId}/branchwise`,
+        `https://dineink-backend.onrender.com/api/bills/${user.restaurantId}/${user.branchId}/branchwise`,
       );
 
       const json = await res.json();
@@ -66,7 +66,7 @@ export default function OrderHistory() {
   const handleCompleteOrder = async (order: any) => {
     try {
       const res = await fetch(
-        `http://localhost:5500/api/running-orders/closeRunningOrder`,
+        `https://dineink-backend.onrender.com/api/running-orders/closeRunningOrder`,
         {
           method: "POST",
 
