@@ -159,6 +159,7 @@ export default function DineIn({
       console.log(error);
     }
   };
+
   const handleSaveOrder = async () => {
     try {
       if (!selectedTable) {
@@ -173,23 +174,17 @@ export default function DineIn({
 
       const items = cartItems.map((item) => ({
         menuItemId: item.id,
-
         itemName: item.name,
-
         quantity: cart[item.id],
-
         price: item.price,
       }));
 
       const response = await saveRunningOrder({
         restaurantId: user.restaurantId,
-
         branchId: user.branchId,
-
+        createdById: user.id, // ✅ ADD THIS
         tableId: selectedTable.id,
-
         items,
-
         orderType: "DINE_IN",
       });
 

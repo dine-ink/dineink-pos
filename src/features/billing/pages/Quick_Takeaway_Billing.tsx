@@ -86,7 +86,7 @@ export default function NormalBilling({ step, setStep, billingType }: Props) {
         branchId: user.branchId,
 
         orderType: billingType,
-
+        createdById: user.id,
         customerName,
 
         customerPhone,
