@@ -258,7 +258,7 @@ export default function NormalBilling({ step, setStep, billingType }: Props) {
           setCustomerName={setCustomerName}
           customerPhone={customerPhone}
           setCustomerPhone={setCustomerPhone}
-          grandTotal={grandTotal}
+          grandTotals={grandTotal}
           billingType={billingType}
           setStep={setStep}
           onConfirm={handleConfirmOrder}
