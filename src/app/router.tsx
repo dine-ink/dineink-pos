@@ -35,6 +35,7 @@ export default function Router() {
           <Route path="tables" element={<TablesPage />} />
 
           <Route path="online-orders" element={<OnlineOrdersPage />} />
+
         </Route>
       </Routes>
     </BrowserRouter>
