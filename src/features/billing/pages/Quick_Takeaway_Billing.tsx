@@ -206,16 +206,13 @@ export default function NormalBilling({
 
         <div class="center">
           <h2 style="margin:0; font-size:24px;">
-            DineInk Restaurant
+            Kd Kari
           </h2>
 
           <p style="font-size:11px; margin-top:6px;">
-            Chennai, Tamil Nadu
+            Kondapur, Hyderabad
           </p>
 
-          <p style="font-size:11px;">
-            Phone: +91 9876543210
-          </p>
 
           <p style="font-size:11px;">
             GSTIN: 33ABCDE1234F1Z5
