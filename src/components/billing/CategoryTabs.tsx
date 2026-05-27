@@ -1,7 +1,8 @@
 import { MdRestaurant } from "react-icons/md";
-
-const iconMap: any = {};
-
+import { FaFire } from "react-icons/fa";
+const iconMap: any = {
+  Trending: FaFire,
+};
 type Props = {
   categories: any[];
   selectedCategory: string;
