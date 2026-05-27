@@ -206,7 +206,7 @@ export default function NormalBilling({
 
         <div class="center">
           <h2 style="margin:0; font-size:24px;">
-            Kd Kari
+            KD Kari
           </h2>
 
           <p style="font-size:11px; margin-top:6px;">
