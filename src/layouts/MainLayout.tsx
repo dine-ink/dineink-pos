@@ -24,6 +24,7 @@ const navigation = [
   { name: "Billing", href: "/app/billing", current: true },
   { name: "Order History", href: "/app/orders", current: false },
   { name: "Online Orders", href: "/app/online-orders", current: false },
+  { name: "Manage Shop", href: "/app/manage-shop", current: false },
 ];
 
 const userNavigation = [
