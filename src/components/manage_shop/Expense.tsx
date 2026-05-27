@@ -442,7 +442,9 @@ export default function Expense() {
 
                       {/* EDIT BUTTON */}
                       <td className="p-4">
-                        <button
+                    
+
+                           <button
                           onClick={() =>
                             setEditRowId(
                               isEditing
@@ -450,15 +452,13 @@ export default function Expense() {
                                 : expense.id
                             )
                           }
-                          className={`h-9 px-3 rounded-lg border flex items-center justify-center gap-2 transition-all ${
+                          className={`h-9 px-3 rounded-xl border flex items-center justify-center transition-all ${
                             isEditing
-                              ? "bg-green-500 text-white border-green-500"
-                              : "border-gray-200 hover:bg-gray-100"
+                              ? "bg-green-500 border-green-500 text-white"
+                              : "border-red-500 text-red-700 hover:bg-red-500  hover:text-white"
                           }`}
                         >
                           <Pencil size={16} />
-
-                          {isEditing && "Save"}
                         </button>
                       </td>
                     </tr>
