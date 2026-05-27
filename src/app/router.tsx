@@ -9,6 +9,7 @@ import OnlineOrdersPage from "@/features/online-orders/pages/LiveOrdersPage";
 
 import LoginPage from "@/features/auth/LoginPage";
 import ProtectedRoute from "@/routes/ProtectedRoutes";
+import ManageShop from "@/components/manage_shop/ManageShop";
 
 export default function Router() {
   return (
@@ -35,6 +36,8 @@ export default function Router() {
           <Route path="tables" element={<TablesPage />} />
 
           <Route path="online-orders" element={<OnlineOrdersPage />} />
+
+          <Route path="manage-shop" element={<ManageShop />} />
 
         </Route>
       </Routes>
