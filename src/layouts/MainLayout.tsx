@@ -11,14 +11,8 @@ import {
   Bell,
   LogOut,
   User,
+  ChefHat,
 } from "lucide-react";
-
-const navItems = [
-  { name: "Billing", href: "/app/billing", icon: Receipt },
-  { name: "Orders", href: "/app/orders", icon: ClipboardList },
-  { name: "Online", href: "/app/online-orders", icon: Wifi },
-  { name: "Shop", href: "/app/manage-shop", icon: Store },
-];
 
 export default function MainLayout() {
   const location = useLocation();
@@ -26,6 +20,24 @@ export default function MainLayout() {
   const navigate = useNavigate();
   const { user } = useAppSelector((state) => state.auth);
 
+  const isKitchen = user?.department === "KITCHEN";
+
+  const navItems = isKitchen
+    ? [{ name: "Kitchen", href: "/app/kitchen", icon: ChefHat }]
+    : [
+        { name: "Billing", href: "/app/billing", icon: Receipt },
+
+        ...(user?.department !== "WAITER"
+          ? [
+              { name: "Orders", href: "/app/orders", icon: ClipboardList },
+              { name: "Online", href: "/app/online-orders", icon: Wifi },
+            ]
+          : []),
+
+        ...(user?.role === "MANAGER"
+          ? [{ name: "Shop", href: "/app/manage-shop", icon: Store }]
+          : []),
+      ];
   const handleLogout = () => {
     dispatch(logout());
     localStorage.clear();

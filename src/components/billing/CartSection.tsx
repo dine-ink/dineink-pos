@@ -1,3 +1,4 @@
+import { useAppSelector } from "@/store/hooks";
 import { Minus, Plus, ShoppingBag, ArrowLeft } from "lucide-react";
 
 type Props = {
@@ -19,6 +20,8 @@ export default function CartSection({
   decreaseQty,
   setStep,
 }: Props) {
+  const { user } = useAppSelector((state) => state.auth);
+  console.log("User Department in CartSection:", user);
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* HEADER */}
@@ -33,7 +36,9 @@ export default function CartSection({
             </button>
             <div>
               <h2 className="text-sm font-black text-gray-900">Your Cart</h2>
-              <p className="text-[10px] text-gray-500">{totalItems} items selected</p>
+              <p className="text-[10px] text-gray-500">
+                {totalItems} items selected
+              </p>
             </div>
           </div>
           {cartItems.length > 0 && (
@@ -54,8 +59,12 @@ export default function CartSection({
                 <ShoppingBag className="h-6 w-6 text-red-400" />
               </div>
               <div>
-                <h3 className="text-sm font-black text-gray-900">Cart is empty</h3>
-                <p className="mt-0.5 text-xs text-gray-500">Add items from the menu</p>
+                <h3 className="text-sm font-black text-gray-900">
+                  Cart is empty
+                </h3>
+                <p className="mt-0.5 text-xs text-gray-500">
+                  Add items from the menu
+                </p>
               </div>
               <button
                 onClick={() => setStep("MENU")}
@@ -78,8 +87,12 @@ export default function CartSection({
 
                   {/* INFO */}
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-xs font-bold text-gray-900">{item.name}</p>
-                    <p className="text-[10px] text-gray-500">₹{item.price} each</p>
+                    <p className="truncate text-xs font-bold text-gray-900">
+                      {item.name}
+                    </p>
+                    <p className="text-[10px] text-gray-500">
+                      ₹{item.price} each
+                    </p>
                   </div>
 
                   {/* QTY STEPPER */}
@@ -117,27 +130,37 @@ export default function CartSection({
         {cartItems.length > 0 && (
           <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col border-l border-gray-100">
             <div className="flex-1 p-3">
-              <h3 className="text-sm font-black text-gray-900">Order Summary</h3>
-              <p className="text-[10px] text-gray-500 mt-0.5">Review before checkout</p>
+              <h3 className="text-sm font-black text-gray-900">
+                Order Summary
+              </h3>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                Review before checkout
+              </p>
               <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500">Items</span>
-                  <span className="text-sm font-black text-gray-900">{totalItems}</span>
+                  <span className="text-sm font-black text-gray-900">
+                    {totalItems}
+                  </span>
                 </div>
                 <div className="mt-3 border-t border-gray-200 pt-3">
                   <p className="text-[10px] text-gray-500">Grand Total</p>
-                  <h2 className="mt-0.5 text-3xl font-black text-red-600">₹{grandTotal.toFixed(2)}</h2>
+                  <h2 className="mt-0.5 text-3xl font-black text-red-600">
+                    ₹{grandTotal.toFixed(2)}
+                  </h2>
                 </div>
               </div>
             </div>
-            <div className="shrink-0 p-3 pt-0">
-              <button
-                onClick={() => setStep("CUSTOMER")}
-                className="flex h-9 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-xs font-black text-white shadow-lg shadow-red-100 transition hover:shadow-xl active:scale-[0.99]"
-              >
-                Continue to Checkout
-              </button>
-            </div>
+            {user?.role !== "WAITER" && (
+              <div className="shrink-0 p-3 pt-0">
+                <button
+                  onClick={() => setStep("CUSTOMER")}
+                  className="flex h-9 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-xs font-black text-white shadow-lg shadow-red-100 transition hover:shadow-xl active:scale-[0.99]"
+                >
+                  Continue to Checkout
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -148,7 +171,9 @@ export default function CartSection({
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-[10px] text-gray-500">Grand Total</p>
-              <h2 className="text-xl font-black text-red-600">₹{grandTotal.toFixed(2)}</h2>
+              <h2 className="text-xl font-black text-red-600">
+                ₹{grandTotal.toFixed(2)}
+              </h2>
             </div>
             <button
               onClick={() => setStep("CUSTOMER")}

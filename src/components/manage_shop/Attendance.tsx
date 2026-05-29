@@ -30,7 +30,6 @@ export default function Attendance() {
   const fetchData = async () => {
     try {
       setLoading(true);
-
       const data = await getTodayAttendance(branch);
 
       setEmployees(data.data || []);
