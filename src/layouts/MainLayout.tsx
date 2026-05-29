@@ -37,26 +37,26 @@ export default function MainLayout() {
   return (
     <div className="flex h-dvh flex-col bg-gray-50">
       {/* ===== TOP NAVBAR ===== */}
-      <header className="shrink-0 z-50 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 shadow-lg">
-        <div className="flex h-14 items-center justify-between px-3 sm:px-4">
+      <header className="shrink-0 z-50 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 shadow-md">
+        <div className="flex h-10 items-center justify-between px-3">
           {/* BRAND */}
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white/20 ring-1 ring-white/30">
-              <span className="text-base font-black text-white">D</span>
+          <div className="flex items-center gap-2">
+            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20 ring-1 ring-white/30">
+              <span className="text-xs font-black text-white">D</span>
             </div>
             <div>
-              <h1 className="text-base font-black leading-none tracking-tight">
+              <h1 className="text-sm font-black leading-none tracking-tight">
                 <span className="text-white">Dine</span>
                 <span className="text-red-200">Ink</span>
               </h1>
-              <p className="text-[8px] font-bold uppercase tracking-[0.2em] text-red-100/70 leading-none mt-0.5">
-                Restaurant POS
+              <p className="text-[7px] font-bold uppercase tracking-widest text-red-100/70 leading-none">
+                POS
               </p>
             </div>
           </div>
 
           {/* DESKTOP NAV LINKS */}
-          <nav className="hidden md:flex items-center gap-1">
+          <nav className="hidden md:flex items-center gap-0.5">
             {navItems.map((item) => {
               const active = location.pathname === item.href;
               const Icon = item.icon;
@@ -64,13 +64,13 @@ export default function MainLayout() {
                 <Link
                   key={item.name}
                   to={item.href}
-                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
                     active
                       ? "bg-white text-red-600 shadow-sm"
                       : "text-red-50/90 hover:bg-white/15 hover:text-white"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3 w-3" />
                   {item.name}
                 </Link>
               );
@@ -78,47 +78,47 @@ export default function MainLayout() {
           </nav>
 
           {/* RIGHT ACTIONS */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             {/* LIVE INDICATOR */}
-            <div className="hidden xl:flex items-center gap-1.5 rounded-xl bg-white/10 px-3 py-1.5">
+            <div className="hidden xl:flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1">
               <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              <span className="text-[10px] font-bold tracking-widest text-white uppercase">
+              <span className="text-[9px] font-bold tracking-widest text-white uppercase">
                 Live
               </span>
             </div>
 
             {/* BELL */}
-            <button className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 text-white transition hover:bg-white/25">
-              <Bell className="h-[18px] w-[18px]" />
-              <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-1 ring-red-500" />
+            <button className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25">
+              <Bell className="h-3.5 w-3.5" />
+              <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-1 ring-red-500" />
             </button>
 
             {/* PROFILE */}
             <Menu as="div" className="relative">
-              <MenuButton className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20 text-white transition hover:bg-white/30 ring-1 ring-white/20">
-                <span className="text-sm font-black">{initial}</span>
+              <MenuButton className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 ring-1 ring-white/20">
+                <span className="text-xs font-black">{initial}</span>
               </MenuButton>
-              <MenuItems className="absolute right-0 mt-2 w-52 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-2xl outline-none z-50">
-                <div className="flex items-center gap-3 px-3 py-2.5 mb-1">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
-                    <User className="h-4 w-4" />
+              <MenuItems className="absolute right-0 mt-1.5 w-44 rounded-xl border border-gray-100 bg-white p-1 shadow-xl outline-none z-50">
+                <div className="flex items-center gap-2 px-2 py-2 mb-0.5">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                    <User className="h-3.5 w-3.5" />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-gray-900 leading-tight">
+                    <p className="text-xs font-bold text-gray-900 leading-tight">
                       {user?.name || "Staff"}
                     </p>
-                    <p className="text-xs text-gray-500 capitalize leading-tight mt-0.5">
+                    <p className="text-[10px] text-gray-500 capitalize leading-tight">
                       {user?.role || "Cashier"}
                     </p>
                   </div>
                 </div>
-                <div className="h-px bg-gray-100 mb-1" />
+                <div className="h-px bg-gray-100 mb-0.5" />
                 <MenuItem>
                   <button
                     onClick={handleLogout}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50"
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50"
                   >
-                    <LogOut className="h-4 w-4" />
+                    <LogOut className="h-3.5 w-3.5" />
                     Sign Out
                   </button>
                 </MenuItem>
@@ -143,22 +143,22 @@ export default function MainLayout() {
               <Link
                 key={item.name}
                 to={item.href}
-                className="flex flex-1 flex-col items-center justify-center gap-0.5 py-2"
+                className="flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5"
               >
                 <div
-                  className={`flex h-8 w-10 items-center justify-center rounded-xl transition-all ${
+                  className={`flex h-7 w-8 items-center justify-center rounded-lg transition-all ${
                     active ? "bg-red-50" : ""
                   }`}
                 >
                   <Icon
-                    className={`h-[22px] w-[22px] transition-colors ${
+                    className={`h-[18px] w-[18px] transition-colors ${
                       active ? "text-red-600" : "text-gray-400"
                     }`}
                     strokeWidth={active ? 2.5 : 2}
                   />
                 </div>
                 <span
-                  className={`text-[10px] font-bold leading-none ${
+                  className={`text-[9px] font-bold leading-none ${
                     active ? "text-red-600" : "text-gray-400"
                   }`}
                 >

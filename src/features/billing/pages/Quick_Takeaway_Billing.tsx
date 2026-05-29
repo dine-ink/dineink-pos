@@ -24,8 +24,6 @@ export default function NormalBilling({
   products,
   categories,
   topSellingItems,
-  fetchData,
-  loading,
   branchData,
 }: Props) {
   const [selectedCategory, setSelectedCategory] = useState("Best Sellers");
@@ -68,80 +66,48 @@ export default function NormalBilling({
     const printWindow = window.open("", "", "width=400,height=800");
     if (!printWindow) return;
     printWindow.document.write(`
-<html>
-  <head>
-    <title>Print Bill</title>
-    <style>
-      @page { size: 80mm auto; margin: 0; }
-      body { margin: 0; padding: 0; font-family: monospace; background: white; }
-      .bill-container { width: 72mm; max-width: 72mm; margin: 0 auto; padding: 4px; box-sizing: border-box; color: black; }
-      .center { text-align: center; }
-      .divider { border-top: 1px dashed black; margin: 8px 0; }
-      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-      td { font-size: 11px; padding: 3px 0; vertical-align: top; word-break: break-word; }
-      .item-name { width: 56%; padding-right: 4px; }
-      .qty { width: 14%; text-align: center; }
-      .amount { width: 30%; text-align: right; }
-      .bill-info td:first-child { width: 35%; }
-      .bill-info td:last-child { text-align: right; }
-      .totals td:first-child { width: 65%; }
-      .totals td:last-child { text-align: right; }
-      .grand-total { font-size: 18px; font-weight: bold; }
-      .footer { text-align: center; margin-top: 12px; }
-      .footer p { margin: 2px 0; }
-      @media print { @page { size: 80mm auto; margin: 0; } body { width: 72mm; } .bill-container { width: 72mm; max-width: 72mm; } }
-    </style>
-  </head>
-  <body onload="window.print(); window.close();">
-    <div class="bill-container">
-      <div class="center">
-        <h2 style="margin:0; font-size:24px;">KD Kari</h2>
-        <p style="font-size:11px; margin-top:6px;">Kondapur, Hyderabad</p>
-        <p style="font-size:11px;">GSTIN: 33ABCDE1234F1Z5</p>
-      </div>
-      <div class="divider"></div>
-      <table class="bill-info">
-        <tr><td>Bill No</td><td>BILL-${Date.now()}</td></tr>
-        <tr><td>Date</td><td>${new Date().toLocaleDateString()}</td></tr>
-        <tr><td>Time</td><td>${new Date().toLocaleTimeString()}</td></tr>
-        <tr><td>Customer</td><td>${customerName || "Walk-in"}</td></tr>
-        <tr><td>Order Type</td><td>${billingType}</td></tr>
-        <tr><td>Payment</td><td>${billingData.paymentMethod}</td></tr>
-      </table>
-      <div class="divider"></div>
-      <table>
-        <thead>
-          <tr>
-            <td class="item-name"><b>Item</b></td>
-            <td class="qty"><b>Qty</b></td>
-            <td class="amount"><b>Amt</b></td>
-          </tr>
-        </thead>
-      </table>
-      <div class="divider"></div>
-      <table>
-        <tbody>
-          ${items.map((item: any) => `<tr><td class="item-name">${item.itemName}</td><td class="qty">${item.quantity}</td><td class="amount">₹${(item.price * item.quantity).toFixed(2)}</td></tr>`).join("")}
-        </tbody>
-      </table>
-      <div class="divider"></div>
-      <table class="totals">
-        <tr><td>Subtotal</td><td>₹${billingData.subtotal.toFixed(2)}</td></tr>
-        <tr><td>Discount</td><td>₹${billingData.discountAmount.toFixed(2)}</td></tr>
-        <tr><td>CGST</td><td>₹${billingData.cgst.toFixed(2)}</td></tr>
-        <tr><td>SGST</td><td>₹${billingData.sgst.toFixed(2)}</td></tr>
-        <tr><td>Service Charge</td><td>₹${billingData.serviceChargeAmount.toFixed(2)}</td></tr>
-        ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingData.packingCharge.toFixed(2)}</td></tr>` : ""}
-        <tr class="grand-total"><td>TOTAL</td><td>₹${billingData.grandTotal.toFixed(2)}</td></tr>
-      </table>
-      <div class="divider"></div>
-      <div class="footer">
-        <p style="font-size:14px; font-weight:bold;">Thank You Visit Again!</p>
-        <p style="font-size:11px;">Powered by DineInk POS</p>
-      </div>
-    </div>
-  </body>
-</html>`);
+<html><head><title>Print Bill</title>
+<style>
+@page{size:80mm auto;margin:0}body{margin:0;padding:0;font-family:monospace;background:white}
+.bill-container{width:72mm;max-width:72mm;margin:0 auto;padding:4px;box-sizing:border-box;color:black}
+.center{text-align:center}.divider{border-top:1px dashed black;margin:8px 0}
+table{width:100%;border-collapse:collapse;table-layout:fixed}
+td{font-size:11px;padding:3px 0;vertical-align:top;word-break:break-word}
+.item-name{width:56%;padding-right:4px}.qty{width:14%;text-align:center}.amount{width:30%;text-align:right}
+.bill-info td:first-child{width:35%}.bill-info td:last-child{text-align:right}
+.totals td:first-child{width:65%}.totals td:last-child{text-align:right}
+.grand-total{font-size:18px;font-weight:bold}.footer{text-align:center;margin-top:12px}.footer p{margin:2px 0}
+@media print{@page{size:80mm auto;margin:0}body{width:72mm}.bill-container{width:72mm;max-width:72mm}}
+</style></head>
+<body onload="window.print();window.close();">
+<div class="bill-container">
+<div class="center"><h2 style="margin:0;font-size:24px;">KD Kari</h2><p style="font-size:11px;margin-top:6px;">Kondapur, Hyderabad</p><p style="font-size:11px;">GSTIN: 33ABCDE1234F1Z5</p></div>
+<div class="divider"></div>
+<table class="bill-info">
+<tr><td>Bill No</td><td>BILL-${Date.now()}</td></tr>
+<tr><td>Date</td><td>${new Date().toLocaleDateString()}</td></tr>
+<tr><td>Time</td><td>${new Date().toLocaleTimeString()}</td></tr>
+<tr><td>Customer</td><td>${customerName || "Walk-in"}</td></tr>
+<tr><td>Order Type</td><td>${billingType}</td></tr>
+<tr><td>Payment</td><td>${billingData.paymentMethod}</td></tr>
+</table>
+<div class="divider"></div>
+<table><thead><tr><td class="item-name"><b>Item</b></td><td class="qty"><b>Qty</b></td><td class="amount"><b>Amt</b></td></tr></thead></table>
+<div class="divider"></div>
+<table><tbody>${items.map((item: any) => `<tr><td class="item-name">${item.itemName}</td><td class="qty">${item.quantity}</td><td class="amount">₹${(item.price * item.quantity).toFixed(2)}</td></tr>`).join("")}</tbody></table>
+<div class="divider"></div>
+<table class="totals">
+<tr><td>Subtotal</td><td>₹${billingData.subtotal.toFixed(2)}</td></tr>
+<tr><td>Discount</td><td>₹${billingData.discountAmount.toFixed(2)}</td></tr>
+<tr><td>CGST</td><td>₹${billingData.cgst.toFixed(2)}</td></tr>
+<tr><td>SGST</td><td>₹${billingData.sgst.toFixed(2)}</td></tr>
+<tr><td>Service Charge</td><td>₹${billingData.serviceChargeAmount.toFixed(2)}</td></tr>
+${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingData.packingCharge.toFixed(2)}</td></tr>` : ""}
+<tr class="grand-total"><td>TOTAL</td><td>₹${billingData.grandTotal.toFixed(2)}</td></tr>
+</table>
+<div class="divider"></div>
+<div class="footer"><p style="font-size:14px;font-weight:bold;">Thank You Visit Again!</p><p style="font-size:11px;">Powered by DineInk POS</p></div>
+</div></body></html>`);
     printWindow.document.close();
   };
 
@@ -186,10 +152,9 @@ export default function NormalBilling({
     <div className="flex h-full flex-col overflow-hidden">
       {/* MENU STEP */}
       {step === "MENU" && (
-        <div className="flex h-full flex-col overflow-hidden xl:flex-row xl:gap-3">
+        <div className="flex h-full flex-col overflow-hidden xl:flex-row xl:gap-2">
           {/* LEFT — MENU */}
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
-            {/* Menu section */}
             <div className="flex-1 min-h-0 overflow-hidden">
               <MenuSection
                 categories={categories}
@@ -203,13 +168,13 @@ export default function NormalBilling({
             </div>
 
             {/* Mobile bottom action bar */}
-            <div className="xl:hidden shrink-0 mt-2 rounded-2xl border border-gray-100 bg-white px-4 py-3 shadow-sm">
+            <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                  <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
                     {billingType === "TAKE_AWAY" ? "Takeaway" : "Quick Bill"}
                   </p>
-                  <p className="text-base font-black text-gray-900">
+                  <p className="text-sm font-black text-gray-900">
                     {totalItems} items ·{" "}
                     <span className="text-red-600">₹{grandTotal}</span>
                   </p>
@@ -217,7 +182,7 @@ export default function NormalBilling({
                 <button
                   onClick={() => setStep("CART")}
                   disabled={!cartItems.length}
-                  className="rounded-xl bg-red-500 px-5 py-2.5 text-sm font-bold text-white shadow-sm disabled:opacity-50"
+                  className="rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
                 >
                   View Cart
                 </button>
@@ -226,41 +191,39 @@ export default function NormalBilling({
           </div>
 
           {/* RIGHT — DESKTOP CART PANEL */}
-          <div className="hidden xl:flex xl:w-[300px] xl:shrink-0 xl:flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-            {/* Header */}
-            <div className="shrink-0 border-b border-gray-100 p-4">
-              <h3 className="text-xl font-black text-gray-900">
+          <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="shrink-0 border-b border-gray-100 px-3 py-2.5">
+              <h3 className="text-sm font-black text-gray-900">
                 Current Order
               </h3>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="text-[10px] text-gray-500 mt-0.5">
                 {billingType === "TAKE_AWAY" ? "Takeaway" : "Quick Billing"}
               </p>
             </div>
-            {/* Items */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-4">
+            <div className="flex-1 min-h-0 overflow-y-auto p-2.5">
               {cartItems.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 p-8 text-center">
-                  <span className="text-3xl">🛒</span>
-                  <p className="mt-3 text-sm font-bold text-gray-500">
+                <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 p-6 text-center">
+                  <span className="text-2xl">🛒</span>
+                  <p className="mt-2 text-xs font-bold text-gray-500">
                     No items yet
                   </p>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {cartItems.map((item: any) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5"
+                      className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-gray-900">
+                        <p className="truncate text-xs font-semibold text-gray-900">
                           {item.name}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-[10px] text-gray-500">
                           × {cart[item.id]}
                         </p>
                       </div>
-                      <p className="ml-2 shrink-0 text-sm font-black text-red-600">
+                      <p className="ml-2 shrink-0 text-xs font-black text-red-600">
                         ₹{item.price * cart[item.id]}
                       </p>
                     </div>
@@ -268,19 +231,18 @@ export default function NormalBilling({
                 </div>
               )}
             </div>
-            {/* Footer */}
-            <div className="shrink-0 border-t border-gray-100 p-4">
+            <div className="shrink-0 border-t border-gray-100 p-2.5">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs text-gray-500">Total</p>
-                  <p className="text-2xl font-black text-red-600">
+                  <p className="text-[10px] text-gray-500">Total</p>
+                  <p className="text-lg font-black text-red-600">
                     ₹{grandTotal}
                   </p>
                 </div>
                 <button
                   onClick={() => setStep("CART")}
                   disabled={!cartItems.length}
-                  className="rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50"
+                  className="rounded-lg bg-red-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50"
                 >
                   View Cart
                 </button>
@@ -289,8 +251,6 @@ export default function NormalBilling({
           </div>
         </div>
       )}
-
-      {/* CART STEP */}
       {step === "CART" && (
         <CartSection
           cartItems={cartItems}
@@ -302,8 +262,6 @@ export default function NormalBilling({
           setStep={setStep}
         />
       )}
-
-      {/* CUSTOMER STEP */}
       {step === "CUSTOMER" && (
         <CustomerSection
           customerName={customerName}

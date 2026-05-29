@@ -5,68 +5,46 @@ import Expense from "./Expense";
 import Inventry from "./Inventry";
 
 const tabs = [
-  {
-    id: 1,
-    name: "Attendance",
-    icon: <ChartNoAxesColumn size={20} />,
-    active: false,
-  },
-  {
-    id: 2,
-    name: "Expense Details",
-    icon: <ClipboardList size={20} />,
-    active: true,
-  },
-  {
-    id: 3,
-    name: "Update Inventory",
-    icon: <Boxes size={20} />,
-    active: false,
-  },
+  { id: "Attendance", label: "Attendance", icon: ChartNoAxesColumn },
+  { id: "Expense Details", label: "Expenses", icon: ClipboardList },
+  { id: "Update Inventory", label: "Inventory", icon: Boxes },
 ];
 
-const navColor = {
-    red :"bg-red-600 text-white border-red-600 shadow-md",
-    white : "bg-white text-slate-900 border-gray-200 hover:border-red-300"
-}
+export default function ManageShop() {
+  const [tab, setTab] = useState("Attendance");
 
-export default function ManageShop  (){
-
-    const [tab , setTab] = useState("Attendance")
-
-    return(
-        <>
-        <div className="w-full p-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {tabs.map((nav) => (
-          <button
-            key={nav.id}
-            className={`
-              h-9 rounded-xl border
-              flex items-center justify-center gap-3
-              text-sm font-semibold transition-all duration-300
-              ${
-                tab === nav.name
-                  ? navColor.red
-                  : navColor.white
-              }
-            `}
-            onClick={()=> setTab(nav.name)}
-          >
-            {nav.icon}
-            {nav.name}
-          </button>
-        ))}
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-gray-50">
+      {/* TAB BAR */}
+      <div className="shrink-0 bg-white border-b border-gray-200 px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          {tabs.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
+                  active
+                    ? "border-red-500 bg-red-500 text-white shadow-sm"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:text-red-600"
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
-     
-    </div> 
-    {
-        tab === "Attendance" ? <Attendance/> : tab === "Expense Details" ? <Expense/> : <Inventry/>
-    }
-         
-      
-      
-        </>
-        
-    );
+
+      {/* CONTENT */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {tab === "Attendance" && <Attendance />}
+        {tab === "Expense Details" && <Expense />}
+        {tab === "Update Inventory" && <Inventry />}
+      </div>
+    </div>
+  );
 }

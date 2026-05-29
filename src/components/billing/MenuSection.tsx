@@ -21,7 +21,7 @@ export default function MenuSection({
   decreaseQty,
 }: Props) {
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* CATEGORY TABS */}
       <div className="shrink-0 border-b border-gray-100">
         <CategoryTabs
@@ -32,15 +32,15 @@ export default function MenuSection({
       </div>
 
       {/* PRODUCT GRID */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-2">
         {filteredProducts.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center gap-2 py-16 text-center">
-            <span className="text-3xl">🍽</span>
-            <p className="text-sm font-bold text-gray-700">No items found</p>
-            <p className="text-xs text-gray-500">Try another category</p>
+          <div className="flex h-full flex-col items-center justify-center gap-1.5 py-12 text-center">
+            <span className="text-2xl">🍽</span>
+            <p className="text-xs font-bold text-gray-700">No items found</p>
+            <p className="text-[11px] text-gray-500">Try another category</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
             {filteredProducts.map((product: any) => (
               <ProductCard
                 key={product.id}

@@ -17,6 +17,7 @@ export default function Router() {
       <Routes>
         {/* Login */}
         <Route path="/" element={<LoginPage />} />
+        <Route path="/login" element={<LoginPage />} />
 
         {/* Protected App */}
         <Route

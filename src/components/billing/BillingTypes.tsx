@@ -27,7 +27,7 @@ export default function BillingTypeTabs({
   if (billingTabs.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 overflow-x-auto [scrollbar-width:none]">
+    <div className="flex items-center gap-1.5 px-2.5 py-1.5 overflow-x-auto [scrollbar-width:none]">
       {billingTabs.map((type) => {
         const active = billingType === type.key;
         return (
@@ -37,13 +37,13 @@ export default function BillingTypeTabs({
               setBillingType(type.key);
               setSelectedTable(null);
             }}
-            className={`shrink-0 flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-bold transition-all ${
+            className={`shrink-0 flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
               active
-                ? "bg-red-500 text-white shadow-sm shadow-red-200"
+                ? "bg-red-500 text-white shadow-sm"
                 : "border border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:text-red-600"
             }`}
           >
-            <span className="text-sm">{type.emoji}</span>
+            <span className="text-xs">{type.emoji}</span>
             {type.label}
           </button>
         );

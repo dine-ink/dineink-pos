@@ -25,7 +25,6 @@ export default function BillingPage() {
       setProducts(data.data.restaurant.menuItems || []);
       setTables(data.data.tables || []);
       setTopSellingItems(data.data.topSellingItems || []);
-
       const originalCategories = data.data.restaurant.categories || [];
       setCategories([
         { id: "BEST_SELLERS", name: "Best Sellers", iconName: "Trending" },
@@ -44,18 +43,14 @@ export default function BillingPage() {
 
   useEffect(() => {
     const billingTypes = branchData?.billing?.billingTypes || [];
-    if (billingTypes.includes("Table Wise Billing")) {
-      setBillingType("DINE_IN");
-    } else if (billingTypes.includes("Takeaway Billing")) {
-      setBillingType("TAKE_AWAY");
-    } else if (billingTypes.includes("Quick Billing")) {
-      setBillingType("QUICK_BILL");
-    }
+    if (billingTypes.includes("Table Wise Billing")) setBillingType("DINE_IN");
+    else if (billingTypes.includes("Takeaway Billing")) setBillingType("TAKE_AWAY");
+    else if (billingTypes.includes("Quick Billing")) setBillingType("QUICK_BILL");
   }, [branchData]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">
-      {/* ===== BILLING TYPE HEADER ===== */}
+      {/* BILLING TYPE HEADER */}
       <div className="shrink-0 border-b border-gray-200 bg-white shadow-sm">
         <BillingTypeTabs
           billingType={billingType}
@@ -65,8 +60,8 @@ export default function BillingPage() {
         />
       </div>
 
-      {/* ===== CONTENT ===== */}
-      <div className="flex-1 min-h-0 overflow-hidden p-2 sm:p-3 xl:p-4">
+      {/* CONTENT */}
+      <div className="flex-1 min-h-0 overflow-hidden p-1.5 sm:p-2 xl:p-2.5">
         {billingType === "DINE_IN" && (
           <DineIn
             step={step}
