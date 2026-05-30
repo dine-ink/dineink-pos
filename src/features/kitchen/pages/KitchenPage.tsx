@@ -1,10 +1,8 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAppSelector } from "@/store/hooks";
-import {
-  getAllRunningOrders,
-  updateRunningOrderStatus,
-} from "@/services/runningOrderService";
+import { getAllRunningOrders, updateRunningOrderStatus } from "@/services/runningOrderService";
 import { ChefHat, RefreshCw, Clock, UtensilsCrossed } from "lucide-react";
+import PageLoader from "@/components/ui/PageLoader";
 
 function getElapsed(createdAt: string) {
   const diff = Math.floor(
@@ -172,8 +170,8 @@ export default function KitchenPage() {
         setOrders(res.data ?? []);
         setLastRefreshed(new Date());
       }
-    } catch (err) {
-      console.error("Kitchen fetch error:", err);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
     }
@@ -193,8 +191,8 @@ export default function KitchenPage() {
     try {
       await updateRunningOrderStatus(orderId, status);
       await fetchOrders();
-    } catch (err) {
-      console.error("Status update error:", err);
+    } catch {
+      // silent
     } finally {
       setUpdatingId(null);
     }
@@ -204,6 +202,8 @@ export default function KitchenPage() {
     (o) => !o.status || o.status === "PENDING" || o.status === "NEW",
   );
   const preparingOrders = orders.filter((o) => o.status === "PREPARING");
+
+  if (loading && orders.length === 0) return <PageLoader />;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">

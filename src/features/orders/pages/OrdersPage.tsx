@@ -1,27 +1,42 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-import {
-  MagnifyingGlassIcon,
-  PrinterIcon,
-  XMarkIcon,
-} from "@heroicons/react/24/solid";
+import { MagnifyingGlassIcon, PrinterIcon, XMarkIcon } from "@heroicons/react/24/solid";
+import PageLoader from "@/components/ui/PageLoader";
+
+const TYPE_BADGE: Record<string, string> = {
+  DINE_IN: "bg-blue-100 text-blue-700",
+  SWIGGY: "bg-orange-100 text-orange-700",
+  ZOMATO: "bg-red-100 text-red-700",
+  TAKE_AWAY: "bg-purple-100 text-purple-700",
+};
+const getTypeBadge = (t: string) => TYPE_BADGE[t] || "bg-gray-100 text-gray-700";
+const getPayBadge = (s: string) =>
+  s === "PAID" ? "bg-emerald-100 text-emerald-700" : s === "PARTIAL" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
+const getStatusBadge = (s: string) =>
+  s === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : s === "READY" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
+const customerDisplay = (order: any) =>
+  typeof order.customer === "object" ? order.customer?.name || "Walk-in" : order.customer || "Walk-in";
 
 export default function OrderHistory() {
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedBill, setSelectedBill] = useState<any>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
 
   const fetchOrders = async () => {
     try {
+      setLoading(true);
       const res = await fetch(
         `https://dineink-backend.onrender.com/api/bills/${user.restaurantId}/${user.branchId}/branchwise`,
       );
       const json = await res.json();
       if (json.success) setOrders(json.bills || []);
-    } catch (error) {
-      console.log(error);
+    } catch {
+      // silently fail, orders stays as empty array
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -29,37 +44,17 @@ export default function OrderHistory() {
     if (user?.restaurantId) fetchOrders();
   }, []);
 
-  const filteredOrders = orders.filter((order) => {
+  const filteredOrders = useMemo(() => {
+    if (!search.trim()) return orders;
     const v = search.toLowerCase();
-    const orderNo = String(order.orderNo || "").toLowerCase();
-    const customer =
-      typeof order.customer === "object"
-        ? String(order.customer?.name || "").toLowerCase()
-        : String(order.customer || "").toLowerCase();
-    return orderNo.includes(v) || customer.includes(v);
-  });
-
-  const getTypeBadge = (type: string) => {
-    const s: Record<string, string> = {
-      DINE_IN: "bg-blue-100 text-blue-700",
-      SWIGGY: "bg-orange-100 text-orange-700",
-      ZOMATO: "bg-red-100 text-red-700",
-      TAKE_AWAY: "bg-purple-100 text-purple-700",
-    };
-    return s[type] || "bg-gray-100 text-gray-700";
-  };
-
-  const getPayBadge = (s: string) => {
-    if (s === "PAID") return "bg-emerald-100 text-emerald-700";
-    if (s === "PARTIAL") return "bg-yellow-100 text-yellow-700";
-    return "bg-red-100 text-red-700";
-  };
-
-  const getStatusBadge = (s: string) => {
-    if (s === "COMPLETED") return "bg-emerald-100 text-emerald-700";
-    if (s === "READY") return "bg-blue-100 text-blue-700";
-    return "bg-yellow-100 text-yellow-700";
-  };
+    return orders.filter((o) => {
+      const orderNo = String(o.orderNo || "").toLowerCase();
+      const customer = typeof o.customer === "object"
+        ? String(o.customer?.name || "").toLowerCase()
+        : String(o.customer || "").toLowerCase();
+      return orderNo.includes(v) || customer.includes(v);
+    });
+  }, [orders, search]);
 
   const handleCompleteOrder = async (order: any) => {
     try {
@@ -77,7 +72,7 @@ export default function OrderHistory() {
       );
       const json = await res.json();
       if (json.success) fetchOrders();
-    } catch (error) { console.log(error); }
+    } catch { /* silent */ }
   };
 
   const handlePrint = () => {
@@ -103,10 +98,7 @@ export default function OrderHistory() {
     }
   };
 
-  const customerDisplay = (order: any) =>
-    typeof order.customer === "object"
-      ? order.customer?.name || "Walk-in"
-      : order.customer || "Walk-in";
+  if (loading) return <PageLoader />;
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">
@@ -137,8 +129,7 @@ export default function OrderHistory() {
             </div>
           )}
           {filteredOrders.map((order) => (
-            <div key={`${order.source}-${order.id}`}
-              className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+            <div key={`${order.source}-${order.id}`} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <p className="text-xs font-black text-gray-900">{order.orderNo}</p>

@@ -1,17 +1,18 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import BillingTypeTabs from "../../../components/billing/BillingTypes";
 import DineIn from "./DineIn_Billing";
 import NormalBilling from "./Quick_Takeaway_Billing";
 import { getBranchDetails } from "@/services/branchService";
 import { getAllRunningOrders } from "@/services/runningOrderService";
+import PageLoader from "@/components/ui/PageLoader";
 
 export default function BillingPage() {
   const { branch, user } = useAppSelector((state) => state.auth);
   const [step, setStep] = useState<"MENU" | "CART" | "CUSTOMER">("MENU");
   const [billingType, setBillingType] = useState("");
   const [selectedTable, setSelectedTable] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [tables, setTables] = useState<any[]>([]);
@@ -19,7 +20,7 @@ export default function BillingPage() {
   const [branchData, setBranchData] = useState<any>(null);
   const [runningOrders, setRunningOrders] = useState<any[]>([]);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const [data, ordersData] = await Promise.all([
@@ -38,16 +39,16 @@ export default function BillingPage() {
         { id: "BEST_SELLERS", name: "Best Sellers", iconName: "Trending" },
         ...originalCategories,
       ]);
-    } catch (error) {
-      console.log(error);
+    } catch {
+      // silent
     } finally {
       setLoading(false);
     }
-  };
+  }, [branch, user?.restaurantId, user?.branchId]);
 
   useEffect(() => {
     if (branch) fetchData();
-  }, [branch]);
+  }, [branch, fetchData]);
 
   useEffect(() => {
     const billingTypes = branchData?.billing?.billingTypes || [];
@@ -58,7 +59,6 @@ export default function BillingPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">
-      {/* BILLING TYPE HEADER */}
       <div className="shrink-0 border-b border-gray-200 bg-white shadow-sm">
         <BillingTypeTabs
           billingType={billingType}
@@ -67,10 +67,10 @@ export default function BillingPage() {
           branchData={branchData}
         />
       </div>
-
-      {/* CONTENT */}
       <div className="flex-1 min-h-0 overflow-hidden p-1.5 sm:p-2 xl:p-2.5">
-        {billingType === "DINE_IN" && (
+        {loading && !branchData ? (
+          <PageLoader />
+        ) : billingType === "DINE_IN" ? (
           <DineIn
             step={step}
             setStep={setStep}
@@ -86,8 +86,7 @@ export default function BillingPage() {
             billingType={billingType}
             runningOrders={runningOrders}
           />
-        )}
-        {(billingType === "TAKE_AWAY" || billingType === "QUICK_BILL") && (
+        ) : (billingType === "TAKE_AWAY" || billingType === "QUICK_BILL") ? (
           <NormalBilling
             billingType={billingType}
             step={step}
@@ -99,7 +98,7 @@ export default function BillingPage() {
             loading={loading}
             branchData={branchData}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );
