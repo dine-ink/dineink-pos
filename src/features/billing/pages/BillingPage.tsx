@@ -4,9 +4,10 @@ import BillingTypeTabs from "../../../components/billing/BillingTypes";
 import DineIn from "./DineIn_Billing";
 import NormalBilling from "./Quick_Takeaway_Billing";
 import { getBranchDetails } from "@/services/branchService";
+import { getAllRunningOrders } from "@/services/runningOrderService";
 
 export default function BillingPage() {
-  const { branch } = useAppSelector((state) => state.auth);
+  const { branch, user } = useAppSelector((state) => state.auth);
   const [step, setStep] = useState<"MENU" | "CART" | "CUSTOMER">("MENU");
   const [billingType, setBillingType] = useState("");
   const [selectedTable, setSelectedTable] = useState<any>(null);
@@ -16,15 +17,22 @@ export default function BillingPage() {
   const [tables, setTables] = useState<any[]>([]);
   const [topSellingItems, setTopSellingItems] = useState<any[]>([]);
   const [branchData, setBranchData] = useState<any>(null);
+  const [runningOrders, setRunningOrders] = useState<any[]>([]);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const data = await getBranchDetails(branch);
+      const [data, ordersData] = await Promise.all([
+        getBranchDetails(branch),
+        user?.restaurantId && user?.branchId
+          ? getAllRunningOrders(user.restaurantId, user.branchId)
+          : Promise.resolve({ data: [] }),
+      ]);
       setBranchData(data.data);
       setProducts(data.data.restaurant.menuItems || []);
       setTables(data.data.tables || []);
       setTopSellingItems(data.data.topSellingItems || []);
+      setRunningOrders(ordersData.data || []);
       const originalCategories = data.data.restaurant.categories || [];
       setCategories([
         { id: "BEST_SELLERS", name: "Best Sellers", iconName: "Trending" },
@@ -76,6 +84,7 @@ export default function BillingPage() {
             loading={loading}
             branchData={branchData}
             billingType={billingType}
+            runningOrders={runningOrders}
           />
         )}
         {(billingType === "TAKE_AWAY" || billingType === "QUICK_BILL") && (

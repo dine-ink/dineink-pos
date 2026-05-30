@@ -40,16 +40,41 @@ export default function Router() {
         >
           <Route index element={<DefaultRedirect />} />
 
+          {/* Billing — all non-kitchen staff; KITCHEN dept auto-blocked by ProtectedRoute */}
           <Route path="billing" element={<BillingPage />} />
 
           <Route path="tables" element={<TablesPage />} />
 
-          <Route path="orders" element={<OrdersPage />} />
+          {/* Orders & Live Orders — Cashier and Manager only */}
+          <Route
+            path="orders"
+            element={
+              <ProtectedRoute allowedRoles={["CASHIER"]}>
+                <OrdersPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="online-orders" element={<OnlineOrdersPage />} />
+          <Route
+            path="online-orders"
+            element={
+              <ProtectedRoute allowedRoles={["CASHIER"]}>
+                <OnlineOrdersPage />
+              </ProtectedRoute>
+            }
+          />
 
-          <Route path="manage-shop" element={<ManageShop />} />
+          {/* Manage Shop — Manager only */}
+          <Route
+            path="manage-shop"
+            element={
+              <ProtectedRoute allowedRoles={["MANAGER"]}>
+                <ManageShop />
+              </ProtectedRoute>
+            }
+          />
 
+          {/* Kitchen — Kitchen dept only (Manager bypasses via superuser) */}
           <Route
             path="kitchen"
             element={

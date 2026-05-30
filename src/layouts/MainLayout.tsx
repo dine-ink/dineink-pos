@@ -21,23 +21,28 @@ export default function MainLayout() {
   const { user } = useAppSelector((state) => state.auth);
 
   const isKitchen = user?.department === "KITCHEN";
+  const role = user?.role;
 
   const navItems = isKitchen
     ? [{ name: "Kitchen", href: "/app/kitchen", icon: ChefHat }]
-    : [
-        { name: "Billing", href: "/app/billing", icon: Receipt },
-
-        ...(user?.department !== "WAITER"
-          ? [
-              { name: "Orders", href: "/app/orders", icon: ClipboardList },
-              { name: "Online", href: "/app/online-orders", icon: Wifi },
-            ]
-          : []),
-
-        ...(user?.role === "MANAGER"
-          ? [{ name: "Shop", href: "/app/manage-shop", icon: Store }]
-          : []),
-      ];
+    : role === "MANAGER"
+      ? [
+          { name: "Billing", href: "/app/billing", icon: Receipt },
+          { name: "Orders", href: "/app/orders", icon: ClipboardList },
+          { name: "Online", href: "/app/online-orders", icon: Wifi },
+          { name: "Kitchen", href: "/app/kitchen", icon: ChefHat },
+          { name: "Shop", href: "/app/manage-shop", icon: Store },
+        ]
+      : role === "CASHIER"
+        ? [
+            { name: "Billing", href: "/app/billing", icon: Receipt },
+            { name: "Orders", href: "/app/orders", icon: ClipboardList },
+            { name: "Online", href: "/app/online-orders", icon: Wifi },
+          ]
+        : [
+            // STAFF and all other roles
+            { name: "Billing", href: "/app/billing", icon: Receipt },
+          ];
   const handleLogout = () => {
     dispatch(logout());
     localStorage.clear();

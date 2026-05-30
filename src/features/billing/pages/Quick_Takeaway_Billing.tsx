@@ -4,6 +4,17 @@ import CustomerSection from "@/components/billing/CustomerSection";
 import { useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { saveRunningOrder } from "@/services/runningOrderService";
+import { PauseCircle, Play } from "lucide-react";
+
+type HeldOrder = {
+  id: string;
+  cart: Record<number, number>;
+  customerName: string;
+  customerPhone: string;
+  customerAddress: string;
+  itemCount: number;
+  label: string;
+};
 
 type Props = {
   step: string;
@@ -31,7 +42,55 @@ export default function NormalBilling({
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
+  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
   const { user } = useAppSelector((state) => state.auth);
+
+  const holdCurrentOrder = () => {
+    if (!Object.keys(cart).length) return;
+    const itemCount = Object.values(cart).reduce((a, b) => a + b, 0);
+    const newHeld: HeldOrder = {
+      id: Date.now().toString(),
+      cart,
+      customerName,
+      customerPhone,
+      customerAddress,
+      itemCount,
+      label: customerName.trim() || `Order #${heldOrders.length + 1}`,
+    };
+    setHeldOrders((prev) => [...prev, newHeld]);
+    setCart({});
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerAddress("");
+    setStep("MENU");
+  };
+
+  const resumeHeldOrder = (held: HeldOrder) => {
+    // if current cart has items, push it to hold first
+    if (Object.keys(cart).length) {
+      const itemCount = Object.values(cart).reduce((a, b) => a + b, 0);
+      const currentAsHeld: HeldOrder = {
+        id: Date.now().toString(),
+        cart,
+        customerName,
+        customerPhone,
+        customerAddress,
+        itemCount,
+        label: customerName.trim() || `Order #${heldOrders.length + 1}`,
+      };
+      setHeldOrders((prev) => [...prev.filter((h) => h.id !== held.id), currentAsHeld]);
+    } else {
+      setHeldOrders((prev) => prev.filter((h) => h.id !== held.id));
+    }
+    setCart(held.cart);
+    setCustomerName(held.customerName);
+    setCustomerPhone(held.customerPhone);
+    setCustomerAddress(held.customerAddress);
+    setStep("MENU");
+  };
+
+  const discardHeldOrder = (id: string) =>
+    setHeldOrders((prev) => prev.filter((h) => h.id !== id));
 
   const filteredProducts =
     selectedCategory === "Best Sellers"
@@ -155,6 +214,45 @@ ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingDa
         <div className="flex h-full flex-col overflow-hidden xl:flex-row xl:gap-2">
           {/* LEFT — MENU */}
           <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
+
+            {/* ON HOLD STRIP */}
+            {heldOrders.length > 0 && (
+              <div className="shrink-0 mb-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2">
+                <div className="flex items-center gap-2 overflow-x-auto">
+                  <div className="flex shrink-0 items-center gap-1 text-amber-700">
+                    <PauseCircle className="h-3.5 w-3.5" />
+                    <span className="text-[10px] font-black uppercase tracking-wide">
+                      On Hold ({heldOrders.length})
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    {heldOrders.map((held) => (
+                      <div key={held.id} className="flex shrink-0 items-center gap-1 rounded-lg border border-amber-300 bg-white pl-2.5 pr-1 py-1 shadow-sm">
+                        <button
+                          onClick={() => resumeHeldOrder(held)}
+                          className="flex items-center gap-1.5"
+                        >
+                          <Play className="h-3 w-3 text-amber-600" />
+                          <span className="max-w-[80px] truncate text-[11px] font-black text-gray-900">
+                            {held.label}
+                          </span>
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">
+                            {held.itemCount} items
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => discardHeldOrder(held.id)}
+                          className="ml-1 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                        >
+                          <span className="text-[10px] font-black">×</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex-1 min-h-0 overflow-hidden">
               <MenuSection
                 categories={categories}
@@ -169,7 +267,7 @@ ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingDa
 
             {/* Mobile bottom action bar */}
             <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
                     {billingType === "TAKE_AWAY" ? "Takeaway" : "Quick Bill"}
@@ -179,13 +277,24 @@ ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingDa
                     <span className="text-red-600">₹{grandTotal}</span>
                   </p>
                 </div>
-                <button
-                  onClick={() => setStep("CART")}
-                  disabled={!cartItems.length}
-                  className="rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
-                >
-                  View Cart
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {cartItems.length > 0 && (
+                    <button
+                      onClick={holdCurrentOrder}
+                      className="flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 shadow-sm"
+                    >
+                      <PauseCircle className="h-3.5 w-3.5" />
+                      Hold
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setStep("CART")}
+                    disabled={!cartItems.length}
+                    className="rounded-lg bg-red-500 px-4 py-2 text-xs font-bold text-white shadow-sm disabled:opacity-50"
+                  >
+                    View Cart
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -231,7 +340,16 @@ ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingDa
                 </div>
               )}
             </div>
-            <div className="shrink-0 border-t border-gray-100 p-2.5">
+            <div className="shrink-0 border-t border-gray-100 p-2.5 space-y-2">
+              {cartItems.length > 0 && (
+                <button
+                  onClick={holdCurrentOrder}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-1.5 text-[11px] font-bold text-amber-700 transition hover:bg-amber-100"
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  Hold Order
+                </button>
+              )}
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-[10px] text-gray-500">Total</p>
@@ -260,6 +378,7 @@ ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingDa
           increaseQty={increaseQty}
           decreaseQty={decreaseQty}
           setStep={setStep}
+          onHold={holdCurrentOrder}
         />
       )}
       {step === "CUSTOMER" && (

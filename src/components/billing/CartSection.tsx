@@ -1,5 +1,5 @@
 import { useAppSelector } from "@/store/hooks";
-import { Minus, Plus, ShoppingBag, ArrowLeft } from "lucide-react";
+import { Minus, Plus, ShoppingBag, ArrowLeft, PauseCircle } from "lucide-react";
 
 type Props = {
   cartItems: any[];
@@ -9,6 +9,7 @@ type Props = {
   increaseQty: any;
   decreaseQty: any;
   setStep: any;
+  onHold?: () => void;
 };
 
 export default function CartSection({
@@ -19,6 +20,7 @@ export default function CartSection({
   increaseQty,
   decreaseQty,
   setStep,
+  onHold,
 }: Props) {
   const { user } = useAppSelector((state) => state.auth);
   console.log("User Department in CartSection:", user);
@@ -151,8 +153,17 @@ export default function CartSection({
                 </div>
               </div>
             </div>
-            {user?.role !== "WAITER" && (
-              <div className="shrink-0 p-3 pt-0">
+            {(user?.role === "MANAGER" || user?.role === "CASHIER") && (
+              <div className="shrink-0 p-3 pt-0 space-y-2">
+                {onHold && (
+                  <button
+                    onClick={onHold}
+                    className="flex h-9 w-full items-center justify-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 text-xs font-black text-amber-700 transition hover:bg-amber-100"
+                  >
+                    <PauseCircle className="h-3.5 w-3.5" />
+                    Hold Order
+                  </button>
+                )}
                 <button
                   onClick={() => setStep("CUSTOMER")}
                   className="flex h-9 w-full items-center justify-center rounded-xl bg-gradient-to-r from-red-500 to-rose-500 text-xs font-black text-white shadow-lg shadow-red-100 transition hover:shadow-xl active:scale-[0.99]"
@@ -175,12 +186,25 @@ export default function CartSection({
                 ₹{grandTotal.toFixed(2)}
               </h2>
             </div>
-            <button
-              onClick={() => setStep("CUSTOMER")}
-              className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 py-2.5 text-xs font-black text-white shadow-lg shadow-red-100"
-            >
-              Checkout
-            </button>
+            <div className="flex flex-1 items-center gap-1.5">
+              {onHold && (user?.role === "MANAGER" || user?.role === "CASHIER") && (
+                <button
+                  onClick={onHold}
+                  className="flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-black text-amber-700"
+                >
+                  <PauseCircle className="h-3.5 w-3.5" />
+                  Hold
+                </button>
+              )}
+              {(user?.role === "MANAGER" || user?.role === "CASHIER") && (
+                <button
+                  onClick={() => setStep("CUSTOMER")}
+                  className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 py-2.5 text-xs font-black text-white shadow-lg shadow-red-100"
+                >
+                  Checkout
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

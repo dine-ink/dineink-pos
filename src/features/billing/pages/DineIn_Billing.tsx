@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import {
   saveRunningOrder,
@@ -26,6 +26,7 @@ type Props = {
   fetchData: any;
   loading: boolean;
   branchData: any;
+  runningOrders: any[];
 };
 
 export default function DineIn({
@@ -41,6 +42,7 @@ export default function DineIn({
   loading,
   branchData,
   billingType,
+  runningOrders,
 }: Props) {
   const [selectedCategory, setSelectedCategory] = useState("Best Sellers");
   const [customerName, setCustomerName] = useState("");
@@ -55,6 +57,15 @@ export default function DineIn({
   const [tempTableName, setTempTableName] = useState("");
   const [tempCapacity, setTempCapacity] = useState("");
   const [mergeTables, setMergeTables] = useState<any[]>([]);
+
+  const canCheckout = user?.role === "MANAGER" || user?.role === "CASHIER";
+
+  // Safety net: STAFF cannot reach the CUSTOMER (billing) step
+  useEffect(() => {
+    if (step === "CUSTOMER" && !canCheckout) {
+      setStep("MENU");
+    }
+  }, [step, canCheckout]);
 
   const filteredProducts =
     selectedCategory === "Best Sellers"
@@ -150,8 +161,19 @@ export default function DineIn({
     setMergeTables([]); setFloorAction("HOME"); await fetchData();
   };
 
-  const availableCount = tables.filter((t) => t.status === "AVAILABLE").length;
-  const occupiedCount = tables.filter((t) => t.status === "OCCUPIED").length;
+  const getTableColorState = (tableId: number): "available" | "in_kitchen" | "occupied" => {
+    const tableOrders = runningOrders.filter((o: any) => o.tableId === tableId);
+    if (tableOrders.length === 0) return "available";
+    const hasInKitchen = tableOrders.some(
+      (o: any) => !o.status || o.status === "PENDING" || o.status === "NEW" || o.status === "PREPARING",
+    );
+    return hasInKitchen ? "in_kitchen" : "occupied";
+  };
+
+  const nonTempTables = tables.filter((t) => !t.isTemporary);
+  const availableCount = nonTempTables.filter((t) => getTableColorState(t.id) === "available").length;
+  const inKitchenCount = nonTempTables.filter((t) => getTableColorState(t.id) === "in_kitchen").length;
+  const occupiedCount = nonTempTables.filter((t) => getTableColorState(t.id) === "occupied").length;
   const tempCount = tables.filter((t) => t.isTemporary).length;
 
   return (
@@ -173,6 +195,11 @@ export default function DineIn({
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
                   {availableCount} Avail
                 </span>
+                {inKitchenCount > 0 && (
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
+                    {inKitchenCount} Kitchen
+                  </span>
+                )}
                 <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-700">
                   {occupiedCount} Occ
                 </span>
@@ -181,14 +208,16 @@ export default function DineIn({
                     {tempCount} Temp
                   </span>
                 )}
-                {/* FLOOR MGMT BUTTON */}
-                <button
-                  onClick={() => { setShowModifyTables(true); setFloorAction("HOME"); }}
-                  className="flex items-center gap-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-red-600 active:scale-95"
-                >
-                  <Settings className="h-3 w-3" />
-                  Floor
-                </button>
+                {/* FLOOR MGMT BUTTON — Manager/Cashier only */}
+                {canCheckout && (
+                  <button
+                    onClick={() => { setShowModifyTables(true); setFloorAction("HOME"); }}
+                    className="flex items-center gap-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-red-600 active:scale-95"
+                  >
+                    <Settings className="h-3 w-3" />
+                    Floor
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -199,7 +228,7 @@ export default function DineIn({
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                 {tables.map((table) => {
-                  const occupied = table.status === "OCCUPIED";
+                  const colorState = table.isTemporary ? null : getTableColorState(table.id);
                   const isTemp = table.isTemporary;
                   const isMerge = table.tempTableType === "MERGE";
 
@@ -215,7 +244,10 @@ export default function DineIn({
                   } else if (isTemp) {
                     borderColor = "border-purple-200"; bgColor = "from-white to-purple-50";
                     dotColor = "bg-purple-500"; labelBg = "bg-purple-100 text-purple-700"; label = "Split";
-                  } else if (occupied) {
+                  } else if (colorState === "in_kitchen") {
+                    borderColor = "border-amber-200"; bgColor = "from-white to-amber-50";
+                    dotColor = "bg-amber-500"; labelBg = "bg-amber-100 text-amber-700"; label = "In Kitchen";
+                  } else if (colorState === "occupied") {
                     borderColor = "border-red-200"; bgColor = "from-white to-red-50";
                     dotColor = "bg-red-500"; labelBg = "bg-red-100 text-red-700"; label = "Occupied";
                   }
@@ -225,7 +257,7 @@ export default function DineIn({
                       key={table.id}
                       onClick={async () => {
                         setSelectedTable(table); setStep("MENU");
-                        if (occupied) await fetchExistingOrder(table.id);
+                        if (colorState && colorState !== "available") await fetchExistingOrder(table.id);
                         else { setCart({}); setRunningOrderId(null); }
                       }}
                       className={`relative flex flex-col justify-between overflow-hidden rounded-xl border-2 p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md bg-gradient-to-br ${borderColor} ${bgColor}`}
