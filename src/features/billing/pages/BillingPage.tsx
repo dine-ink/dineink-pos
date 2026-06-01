@@ -50,6 +50,19 @@ export default function BillingPage() {
     if (branch) fetchData();
   }, [branch, fetchData]);
 
+  // Keep running-orders fresh so table colours update without full reload
+  useEffect(() => {
+    if (!user?.restaurantId || !user?.branchId) return;
+    const poll = async () => {
+      try {
+        const ordersData = await getAllRunningOrders(user.restaurantId, user.branchId);
+        setRunningOrders(ordersData.data || []);
+      } catch { /* silent */ }
+    };
+    const id = setInterval(poll, 30000);
+    return () => clearInterval(id);
+  }, [user?.restaurantId, user?.branchId]);
+
   useEffect(() => {
     const billingTypes = branchData?.billing?.billingTypes || [];
     if (billingTypes.includes("Table Wise Billing")) setBillingType("DINE_IN");

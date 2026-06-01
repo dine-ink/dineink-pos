@@ -6,11 +6,11 @@ export const saveRunningOrder = async (data: any) => {
   return response.data;
 };
 
+// Returns array — each order placement for this table is a separate RunningOrder
 export const getRunningOrderByTable = async (tableId: number) => {
   const response = await api.get(
     `/running-orders/${tableId}/runningOrdertable`,
   );
-
   return response.data;
 };
 
@@ -39,6 +39,20 @@ export const updateRunningOrderStatus = async (
     `/running-orders/${orderId}/updateStatus`,
     { status },
   );
+  return response.data;
+};
 
+export const requestItemCancel = async (itemId: number) => {
+  const response = await api.patch(`/running-orders/items/${itemId}/request-cancel`);
+  return response.data;
+};
+
+export const approveItemCancel = async (itemId: number) => {
+  const response = await api.patch(`/running-orders/items/${itemId}/approve-cancel`);
+  return response.data;
+};
+
+export const rejectItemCancel = async (itemId: number) => {
+  const response = await api.patch(`/running-orders/items/${itemId}/reject-cancel`);
   return response.data;
 };

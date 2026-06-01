@@ -115,7 +115,9 @@ export default function NormalBilling({
     });
 
   const totalItems = Object.values(cart).reduce((acc, qty) => acc + qty, 0);
-  const cartItems = products.filter((p) => cart[p.id]);
+  // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
+  const allMenuItems = [...products, ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id))];
+  const cartItems = allMenuItems.filter((p) => cart[p.id]);
   const grandTotal = useMemo(
     () => cartItems.reduce((acc, item) => acc + item.price * cart[item.id], 0),
     [cartItems, cart],

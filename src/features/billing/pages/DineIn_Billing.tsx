@@ -3,15 +3,17 @@ import { useAppSelector } from "@/store/hooks";
 import {
   saveRunningOrder,
   getRunningOrderByTable,
+  updateRunningOrderStatus,
+  closeRunningOrder,
+  requestItemCancel,
 } from "@/services/runningOrderService";
 import MenuSection from "@/components/billing/MenuSection";
-import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
 import {
   createRestaurantTable,
   deleteRestaurantTable,
 } from "@/services/restaurantTableService";
-import { Settings, ArrowLeft, X } from "lucide-react";
+import { Settings, ArrowLeft, X, Minus, Plus } from "lucide-react";
 
 type Props = {
   step: string;
@@ -49,7 +51,7 @@ export default function DineIn({
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<any>({});
-  const [runningOrderId, setRunningOrderId] = useState<number | null>(null);
+  const [tableOrders, setTableOrders] = useState<any[]>([]); // all KOTs for selected table
   const { user } = useAppSelector((state) => state.auth);
   const [showModifyTables, setShowModifyTables] = useState(false);
   const [floorAction, setFloorAction] = useState<"HOME" | "SUB_TABLE" | "MERGE">("HOME");
@@ -87,43 +89,22 @@ export default function DineIn({
   const totalItems: number = Object.values(cart).reduce(
     (acc: any, qty: any) => acc + qty, 0,
   ) as number;
-  const cartItems = products.filter((p) => cart[p.id]);
+  // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
+  const allMenuItems = [...products, ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id))];
+  const cartItems = allMenuItems.filter((p) => cart[p.id]);
   const grandTotal = cartItems.reduce((acc, item) => acc + item.price * cart[item.id], 0);
 
-  const handleConfirmOrder = async (billingData: any) => {
-    if (!cartItems.length) return;
-    const items = cartItems.map((item) => ({
-      menuItemId: item.id, itemName: item.name, quantity: cart[item.id], price: item.price,
-    }));
-    const response = await saveRunningOrder({
-      restaurantId: user.restaurantId, branchId: user.branchId, createdById: user.id,
-      orderType: billingType, customerName, customerPhone, customerAddress,
-      paymentMethod: billingData.paymentMethod, subtotal: grandTotal,
-      discountAmount: billingData.discountAmount, packingCharge: billingData.packingCharge,
-      serviceCharge: billingData.serviceChargeAmount, gstAmount: billingData.gstAmount,
-      cgst: billingData.cgst, sgst: billingData.sgst, finalAmount: billingData.grandTotal, items,
-    });
-    if (response.success) {
-      setCart({}); setCustomerName(""); setCustomerPhone(""); setCustomerAddress(""); setStep("MENU");
-    }
-  };
-
+  // Load all KOTs for this table — cart stays empty (new order starts fresh)
   const fetchExistingOrder = async (tableId: number) => {
     try {
       const response = await getRunningOrderByTable(tableId);
-      if (response.data) {
-        setCart({}); setRunningOrderId(response.data.id);
-        const updatedCart: any = {};
-        response.data.batches.forEach((batch: any) => {
-          batch.items.forEach((item: any) => {
-            updatedCart[item.menuItemId] = (updatedCart[item.menuItemId] || 0) + item.quantity;
-          });
-        });
-        setCart(updatedCart);
-      }
-    } catch (error) { console.log(error); }
+      const orders = Array.isArray(response.data) ? response.data : response.data ? [response.data] : [];
+      setTableOrders(orders);
+      setCart({});
+    } catch { /* silent */ }
   };
 
+  // Save current cart as a NEW KOT — each save = separate running order in kitchen
   const handleSaveOrder = async () => {
     if (!selectedTable || !cartItems.length) return;
     const items = cartItems.map((item) => ({
@@ -134,8 +115,47 @@ export default function DineIn({
       tableId: selectedTable.id, items, orderType: "DINE_IN",
     });
     if (response.success) {
-      setRunningOrderId(response.data?.id || runningOrderId); setCart({}); await fetchData();
+      setCart({});
+      await fetchExistingOrder(selectedTable.id); // refresh order history
+      await fetchData();
     }
+  };
+
+  // Close all running orders for this table and generate the bill
+  const handleGenerateBill = async (billingData: any) => {
+    if (!selectedTable) return;
+    try {
+      const response = await closeRunningOrder({
+        tableId: selectedTable.id,
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+        customerName, customerPhone, customerAddress,
+        paymentMethod: billingData.paymentMethod,
+        orderType: "DINE_IN",
+        subtotal: billingData.subtotal,
+        discountAmount: billingData.discountAmount,
+        packingCharge: billingData.packingCharge,
+        serviceCharge: billingData.serviceChargeAmount,
+        gstAmount: billingData.gstAmount,
+        cgst: billingData.cgst,
+        sgst: billingData.sgst,
+        finalAmount: billingData.grandTotal,
+      });
+      if (response.success) {
+        setCart({}); setTableOrders([]);
+        setCustomerName(""); setCustomerPhone(""); setCustomerAddress("");
+        setSelectedTable(null); setStep("MENU");
+        await fetchData();
+      }
+    } catch { /* silent */ }
+  };
+
+  // Request item cancellation — kitchen will approve or reject
+  const handleRequestCancel = async (itemId: number) => {
+    try {
+      await requestItemCancel(itemId);
+      if (selectedTable) await fetchExistingOrder(selectedTable.id);
+    } catch { /* silent */ }
   };
 
   const handleCreateSubTable = async () => {
@@ -161,18 +181,31 @@ export default function DineIn({
     setMergeTables([]); setFloorAction("HOME"); await fetchData();
   };
 
-  const getTableColorState = (tableId: number): "available" | "in_kitchen" | "occupied" => {
+  const getTableColorState = (tableId: number): "available" | "in_kitchen" | "ready_to_serve" | "occupied" => {
     const tableOrders = runningOrders.filter((o: any) => o.tableId === tableId);
     if (tableOrders.length === 0) return "available";
-    const hasInKitchen = tableOrders.some(
-      (o: any) => !o.status || o.status === "PENDING" || o.status === "NEW" || o.status === "PREPARING",
+    if (tableOrders.some((o: any) => !o.status || o.status === "PENDING" || o.status === "NEW" || o.status === "PREPARING")) return "in_kitchen";
+    if (tableOrders.some((o: any) => o.status === "READY")) return "ready_to_serve";
+    return "occupied"; // all DELIVERED — customer eating, bill not closed
+  };
+
+  const selectedTableColorState = selectedTable && !selectedTable.isTemporary
+    ? getTableColorState(selectedTable.id)
+    : null;
+
+  const handleMarkDelivered = async () => {
+    if (!selectedTable) return;
+    const readyOrders = runningOrders.filter(
+      (o: any) => o.tableId === selectedTable.id && o.status === "READY",
     );
-    return hasInKitchen ? "in_kitchen" : "occupied";
+    await Promise.all(readyOrders.map((o: any) => updateRunningOrderStatus(o.id, "DELIVERED")));
+    await fetchData();
   };
 
   const nonTempTables = tables.filter((t) => !t.isTemporary);
   const availableCount = nonTempTables.filter((t) => getTableColorState(t.id) === "available").length;
   const inKitchenCount = nonTempTables.filter((t) => getTableColorState(t.id) === "in_kitchen").length;
+  const readyToServeCount = nonTempTables.filter((t) => getTableColorState(t.id) === "ready_to_serve").length;
   const occupiedCount = nonTempTables.filter((t) => getTableColorState(t.id) === "occupied").length;
   const tempCount = tables.filter((t) => t.isTemporary).length;
 
@@ -198,6 +231,11 @@ export default function DineIn({
                 {inKitchenCount > 0 && (
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
                     {inKitchenCount} Kitchen
+                  </span>
+                )}
+                {readyToServeCount > 0 && (
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700 animate-pulse">
+                    {readyToServeCount} Ready
                   </span>
                 )}
                 <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-700">
@@ -247,6 +285,9 @@ export default function DineIn({
                   } else if (colorState === "in_kitchen") {
                     borderColor = "border-amber-200"; bgColor = "from-white to-amber-50";
                     dotColor = "bg-amber-500"; labelBg = "bg-amber-100 text-amber-700"; label = "In Kitchen";
+                  } else if (colorState === "ready_to_serve") {
+                    borderColor = "border-blue-300"; bgColor = "from-white to-blue-50";
+                    dotColor = "bg-blue-500"; labelBg = "bg-blue-100 text-blue-700"; label = "Ready!";
                   } else if (colorState === "occupied") {
                     borderColor = "border-red-200"; bgColor = "from-white to-red-50";
                     dotColor = "bg-red-500"; labelBg = "bg-red-100 text-red-700"; label = "Occupied";
@@ -258,7 +299,7 @@ export default function DineIn({
                       onClick={async () => {
                         setSelectedTable(table); setStep("MENU");
                         if (colorState && colorState !== "available") await fetchExistingOrder(table.id);
-                        else { setCart({}); setRunningOrderId(null); }
+                        else { setCart({}); setTableOrders([]); }
                       }}
                       className={`relative flex flex-col justify-between overflow-hidden rounded-xl border-2 p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md bg-gradient-to-br ${borderColor} ${bgColor}`}
                     >
@@ -524,6 +565,20 @@ export default function DineIn({
                   </button>
                 </div>
 
+                {/* Ready-to-serve banner (mobile) */}
+                {selectedTableColorState === "ready_to_serve" && (
+                  <div className="xl:hidden shrink-0 mb-1.5 flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                      <p className="text-xs font-black text-blue-700">Order ready in kitchen!</p>
+                    </div>
+                    <button onClick={handleMarkDelivered}
+                      className="rounded-lg bg-blue-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-blue-600 active:scale-95">
+                      Mark Delivered
+                    </button>
+                  </div>
+                )}
+
                 {/* Menu section */}
                 <div className="flex-1 min-h-0 overflow-hidden">
                   <MenuSection categories={categories} selectedCategory={selectedCategory} setSelectedCategory={setSelectedCategory}
@@ -532,22 +587,33 @@ export default function DineIn({
 
                 {/* Mobile action bar */}
                 <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wide">Running Order</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wide">
+                        {tableOrders.length > 0 ? `${tableOrders.length} KOT · Table total` : "New order"}
+                      </p>
                       <p className="text-sm font-black text-gray-900">
-                        {totalItems} items · <span className="text-red-600">₹{grandTotal}</span>
+                        {totalItems > 0 && <span>{totalItems} items · </span>}
+                        <span className="text-red-600">
+                          ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) + grandTotal}
+                        </span>
                       </p>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex shrink-0 items-center gap-1.5">
                       <button onClick={handleSaveOrder} disabled={loading || !cartItems.length}
                         className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm disabled:opacity-50">
                         {loading ? "Saving..." : "Save"}
                       </button>
-                      <button onClick={() => setStep("CART")} disabled={!cartItems.length}
-                        className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm disabled:opacity-50">
+                      <button onClick={() => setStep("CART")}
+                        className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-600">
                         Cart
                       </button>
+                      {canCheckout && tableOrders.length > 0 && (
+                        <button onClick={() => setStep("CUSTOMER")}
+                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600">
+                          Bill
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -555,6 +621,19 @@ export default function DineIn({
 
               {/* RIGHT — DESKTOP ORDER PANEL */}
               <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+                {/* Ready-to-serve banner (desktop) */}
+                {selectedTableColorState === "ready_to_serve" && (
+                  <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                      <p className="text-[11px] font-black text-blue-700">Ready in kitchen!</p>
+                    </div>
+                    <button onClick={handleMarkDelivered}
+                      className="rounded-lg bg-blue-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-blue-600">
+                      Delivered
+                    </button>
+                  </div>
+                )}
                 {/* Header */}
                 <div className="shrink-0 border-b border-gray-100 px-3 py-2.5">
                   <div className="flex items-start justify-between">
@@ -567,60 +646,295 @@ export default function DineIn({
                     </button>
                   </div>
                 </div>
-                {/* Items */}
-                <div className="flex-1 min-h-0 overflow-y-auto p-2.5">
-                  {cartItems.length === 0 ? (
+                {/* Order history + current cart */}
+                <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-2">
+                  {/* Past KOTs for this table */}
+                  {tableOrders.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">Order History</p>
+                      <div className="space-y-1.5">
+                        {tableOrders.map((order: any) => {
+                          const s = order.kitchenStatus;
+                          const badgeCls = s === "DELIVERED" ? "bg-emerald-100 text-emerald-700" : s === "READY" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700";
+                          const badgeTxt = s === "DELIVERED" ? "Delivered" : s === "READY" ? "Ready" : "In Kitchen";
+                          const items = order.batches?.flatMap((b: any) => b.items) ?? [];
+                          return (
+                            <div key={order.id} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-[10px] font-black text-gray-700">KOT #{order.orderNo ?? order.id}</p>
+                                <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${badgeCls}`}>{badgeTxt}</span>
+                              </div>
+                              {items.map((item: any, i: number) => (
+                                <p key={i} className="text-[10px] text-gray-500">{item.itemName} × {item.quantity}</p>
+                              ))}
+                              <p className="mt-0.5 text-right text-[10px] font-black text-red-600">₹{order.totalAmount}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  {/* Current unsaved cart */}
+                  {cartItems.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">New Order</p>
+                      <div className="space-y-1.5">
+                        {cartItems.map((item: any) => (
+                          <div key={item.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-2.5 py-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-semibold text-gray-900">{item.name}</p>
+                              <p className="text-[10px] text-gray-500">× {cart[item.id]}</p>
+                            </div>
+                            <p className="ml-2 shrink-0 text-xs font-black text-red-600">₹{item.price * cart[item.id]}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {tableOrders.length === 0 && cartItems.length === 0 && (
                     <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 p-6 text-center">
                       <span className="text-2xl">🛒</span>
                       <p className="mt-2 text-xs font-bold text-gray-500">No items yet</p>
                     </div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {cartItems.map((item: any) => (
-                        <div key={item.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-semibold text-gray-900">{item.name}</p>
-                            <p className="text-[10px] text-gray-500">× {cart[item.id]}</p>
-                          </div>
-                          <p className="ml-2 shrink-0 text-xs font-black text-red-600">₹{item.price * cart[item.id]}</p>
-                        </div>
-                      ))}
-                    </div>
                   )}
                 </div>
                 {/* Footer */}
-                <div className="shrink-0 border-t border-gray-100 p-2.5">
+                <div className="shrink-0 border-t border-gray-100 p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] text-gray-500">Total</p>
-                      <p className="text-lg font-black text-red-600">₹{grandTotal}</p>
+                      <p className="text-[10px] text-gray-500">Table Total</p>
+                      <p className="text-lg font-black text-red-600">
+                        ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) + grandTotal}
+                      </p>
                     </div>
                     <div className="flex gap-1.5">
                       <button onClick={handleSaveOrder} disabled={loading || !cartItems.length}
                         className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50">
                         {loading ? "Saving..." : "Save"}
                       </button>
-                      <button onClick={() => setStep("CART")} disabled={!cartItems.length}
-                        className="rounded-lg bg-red-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50">
-                        View Cart
+                      <button onClick={() => setStep("CART")}
+                        className="rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600">
+                        Cart
                       </button>
                     </div>
                   </div>
+                  {canCheckout && tableOrders.length > 0 && (
+                    <button onClick={() => setStep("CUSTOMER")}
+                      className="w-full rounded-xl bg-emerald-500 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 active:scale-[0.99]">
+                      Generate Bill · ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0)}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
           )}
 
           {step === "CART" && (
-            <CartSection cartItems={cartItems} activeCart={cart} grandTotal={grandTotal} totalItems={totalItems}
-              increaseQty={increaseQty} decreaseQty={decreaseQty} setStep={setStep} />
+            <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              {/* Header */}
+              <div className="shrink-0 border-b border-gray-100 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => setStep("MENU")}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50">
+                      <ArrowLeft className="h-3.5 w-3.5" />
+                    </button>
+                    <div>
+                      <h2 className="text-sm font-black text-gray-900">{selectedTable.name} — Orders</h2>
+                      <p className="text-[10px] text-gray-500">
+                        {tableOrders.length} KOT{tableOrders.length !== 1 ? "s" : ""} placed
+                        {cartItems.length > 0 && ` · ${cartItems.length} unsaved items`}
+                      </p>
+                    </div>
+                  </div>
+                  {canCheckout && tableOrders.length > 0 && (
+                    <button onClick={() => setStep("CUSTOMER")}
+                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600">
+                      Generate Bill
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-3">
+
+                {/* ── Placed KOTs ── */}
+                {tableOrders.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Placed Orders</p>
+                    {tableOrders.map((order: any) => {
+                      const ks = order.kitchenStatus ?? "PENDING";
+                      const badgeCls =
+                        ks === "DELIVERED" ? "bg-emerald-100 text-emerald-700" :
+                        ks === "READY"     ? "bg-blue-100 text-blue-700" :
+                                             "bg-amber-100 text-amber-700";
+                      const badgeTxt =
+                        ks === "DELIVERED" ? "Delivered" :
+                        ks === "READY"     ? "Ready" : "In Kitchen";
+                      const kotNo    = order.orderNo ?? order.id;
+                      const items    = order.batches?.flatMap((b: any) => b.items) ?? [];
+                      const placedAt = new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+                      const doneAt   = order.completedAt
+                        ? new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        : null;
+                      const delivAt  = ks === "DELIVERED"
+                        ? new Date(order.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        : null;
+
+                      return (
+                        <div key={order.id} className="overflow-hidden rounded-xl border border-gray-200">
+                          {/* KOT header */}
+                          <div className={`flex items-center justify-between px-3 py-2 ${
+                            ks === "DELIVERED" ? "bg-emerald-50" : ks === "READY" ? "bg-blue-50" : "bg-amber-50"
+                          }`}>
+                            <div>
+                              <p className="text-xs font-black text-gray-900">KOT #{kotNo}</p>
+                              <p className="text-[10px] text-gray-500">Ordered at {placedAt}</p>
+                            </div>
+                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${badgeCls}`}>
+                              {badgeTxt}
+                            </span>
+                          </div>
+
+                          {/* Items — with per-item cancel request */}
+                          <div className="divide-y divide-gray-100">
+                            {items.map((item: any) => {
+                              const itemStatus = item.status ?? "PENDING";
+                              const isCancelled = itemStatus === "CANCELLED";
+                              const isCancelReq  = itemStatus === "CANCEL_REQUESTED";
+                              return (
+                                <div key={item.id} className={`flex items-center justify-between px-3 py-1.5 ${isCancelled ? "opacity-40" : ""}`}>
+                                  <div className="flex items-center gap-1.5 min-w-0">
+                                    <p className={`text-xs font-semibold ${isCancelled ? "text-gray-400 line-through" : "text-gray-800"}`}>
+                                      {item.itemName}
+                                    </p>
+                                    {isCancelReq && (
+                                      <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[8px] font-black text-orange-600 shrink-0">
+                                        Pending Cancel
+                                      </span>
+                                    )}
+                                    {isCancelled && (
+                                      <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[8px] font-black text-red-500 shrink-0">
+                                        Cancelled
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span className="text-[10px] text-gray-500">× {item.quantity}</span>
+                                    <span className="text-xs font-black text-red-600">₹{item.total ?? item.price * item.quantity}</span>
+                                    {/* Cancel request button — only for active items */}
+                                    {!isCancelled && !isCancelReq && (
+                                      <button
+                                        onClick={() => handleRequestCancel(item.id)}
+                                        title="Request cancellation"
+                                        className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition hover:bg-red-100 hover:text-red-500"
+                                      >
+                                        <span className="text-[11px] font-black leading-none">×</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Timeline + total */}
+                          <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-3 py-1.5">
+                            <div className="flex items-center gap-2.5 text-[9px] text-gray-400">
+                              <span>📋 {placedAt}</span>
+                              {doneAt  && <span className="text-blue-500">🍳 {doneAt}</span>}
+                              {delivAt && <span className="text-emerald-500">✓ {delivAt}</span>}
+                            </div>
+                            <p className="text-xs font-black text-red-600">₹{order.totalAmount}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── Unsaved cart items ── */}
+                {cartItems.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">
+                      New Order — Not Yet Saved
+                    </p>
+                    <div className="overflow-hidden rounded-xl border-2 border-dashed border-amber-300">
+                      {cartItems.map((item: any) => (
+                        <div key={item.id}
+                          className="flex items-center gap-2.5 border-b border-amber-100 px-3 py-2 last:border-0">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-gray-900">{item.name}</p>
+                            <p className="text-[10px] text-gray-500">₹{item.price} each</p>
+                          </div>
+                          <div className="flex items-center gap-1 rounded-lg bg-red-500 px-1 py-1 text-white">
+                            <button onClick={() => decreaseQty(item.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90">
+                              <Minus className="h-2.5 w-2.5" strokeWidth={3} />
+                            </button>
+                            <span className="min-w-[18px] text-center text-xs font-black">{cart[item.id]}</span>
+                            <button onClick={() => increaseQty(item.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90">
+                              <Plus className="h-2.5 w-2.5" strokeWidth={3} />
+                            </button>
+                          </div>
+                          <p className="shrink-0 text-xs font-black text-red-600">
+                            ₹{item.price * cart[item.id]}
+                          </p>
+                        </div>
+                      ))}
+                      <div className="flex items-center justify-between bg-amber-50 px-3 py-2">
+                        <p className="text-xs text-amber-700 font-bold">New order total</p>
+                        <p className="text-sm font-black text-red-600">₹{grandTotal}</p>
+                      </div>
+                    </div>
+                    <button onClick={async () => { await handleSaveOrder(); setStep("MENU"); }}
+                      disabled={loading}
+                      className="w-full rounded-xl bg-red-500 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50">
+                      {loading ? "Saving..." : "Save to Kitchen"}
+                    </button>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {tableOrders.length === 0 && cartItems.length === 0 && (
+                  <div className="flex h-full flex-col items-center justify-center py-12 text-center">
+                    <span className="text-3xl">🛒</span>
+                    <p className="mt-2 text-sm font-bold text-gray-500">No orders yet</p>
+                    <p className="text-xs text-gray-400">Add items from the menu</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer summary */}
+              {(tableOrders.length > 0 || cartItems.length > 0) && (
+                <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-2.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-gray-500">Table Total</p>
+                      <p className="text-xl font-black text-red-600">
+                        ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) + grandTotal}
+                      </p>
+                    </div>
+                    {canCheckout && tableOrders.length > 0 && (
+                      <button onClick={() => setStep("CUSTOMER")}
+                        className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-600">
+                        Generate Bill
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           {step === "CUSTOMER" && (
             <CustomerSection customerName={customerName} setCustomerName={setCustomerName}
               customerAddress={customerAddress} setCustomerAddress={setCustomerAddress}
               customerPhone={customerPhone} setCustomerPhone={setCustomerPhone}
-              grand_Total={grandTotal} billingType="DINE_IN" setStep={setStep}
-              onConfirm={handleConfirmOrder} billing={branchData.billing} />
+              grand_Total={tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0)}
+              billingType="DINE_IN" setStep={setStep}
+              onConfirm={handleGenerateBill} billing={branchData.billing} />
           )}
         </div>
       )}
