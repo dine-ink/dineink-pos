@@ -33,10 +33,19 @@ export default function CustomerSection({
   const serviceChargePercentage = billing?.serviceCharge || 0;
   const serviceChargeAmount = ((subtotal - discountAmount + packing) * serviceChargePercentage) / 100;
   const taxableAmount = subtotal - discountAmount + packing + serviceChargeAmount;
-  const gstAmount = billing?.includeGST ? (taxableAmount * gstPercentage) / 100 : 0;
+
+  // includeGST = true  → GST is already IN item prices (inclusive). Extract for display, don't add to total.
+  // includeGST = false → GST is on top of item prices (exclusive). Calculate and add to total.
+  const isGSTInclusive = billing?.includeGST ?? false;
+  const gstAmount = gstPercentage > 0
+    ? isGSTInclusive
+      ? taxableAmount * gstPercentage / (100 + gstPercentage)  // extract from price
+      : (taxableAmount * gstPercentage) / 100                   // add on top
+    : 0;
   const cgst = gstAmount / 2;
   const sgst = gstAmount / 2;
-  const totalBeforeRoundOff = taxableAmount + gstAmount;
+  // When inclusive, GST is already in taxableAmount — don't add again
+  const totalBeforeRoundOff = isGSTInclusive ? taxableAmount : taxableAmount + gstAmount;
   const grandTotal = roundOff ? Math.round(totalBeforeRoundOff) : totalBeforeRoundOff;
   const balance = grandTotal - (Number(cashReceived) || 0);
 
@@ -133,8 +142,14 @@ export default function CustomerSection({
                     </div>
                   )}
                   {billingRow(<span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Service ({serviceChargePercentage}%)</span>, `+₹${serviceChargeAmount.toFixed(2)}`)}
-                  {billingRow(`CGST (${gstPercentage / 2}%)`, `₹${cgst.toFixed(2)}`)}
-                  {billingRow(`SGST (${gstPercentage / 2}%)`, `₹${sgst.toFixed(2)}`)}
+                  {gstPercentage > 0 && billingRow(
+                    `CGST (${gstPercentage / 2}%)${isGSTInclusive ? " incl." : ""}`,
+                    `${isGSTInclusive ? "" : "+"}₹${cgst.toFixed(2)}`
+                  )}
+                  {gstPercentage > 0 && billingRow(
+                    `SGST (${gstPercentage / 2}%)${isGSTInclusive ? " incl." : ""}`,
+                    `${isGSTInclusive ? "" : "+"}₹${sgst.toFixed(2)}`
+                  )}
                   {billingRow(
                     <span className="flex items-center gap-1.5"><Info className="h-3 w-3" /> Round Off</span>,
                     <label className="flex items-center gap-1.5 cursor-pointer">
