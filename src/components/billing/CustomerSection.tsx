@@ -21,6 +21,7 @@ export default function CustomerSection({
   const [discount, setDiscount] = useState<number>(0);
   const [packingCharge, setPackingCharge] = useState<number>(0);
   const [roundOff, setRoundOff] = useState(true);
+  const [applyServiceCharge, setApplyServiceCharge] = useState(true);
   const [cashReceived, setCashReceived] = useState("");
   const [paymentMethod, setPaymentMethod] = useState(
     billing.paymentMethods?.[0]?.toLowerCase() || "",
@@ -31,7 +32,9 @@ export default function CustomerSection({
   const packing = Number(packingCharge) || 0;
   const gstPercentage = billing?.gstPercentage || 0;
   const serviceChargePercentage = billing?.serviceCharge || 0;
-  const serviceChargeAmount = ((subtotal - discountAmount + packing) * serviceChargePercentage) / 100;
+  const serviceChargeAmount = applyServiceCharge
+    ? ((subtotal - discountAmount + packing) * serviceChargePercentage) / 100
+    : 0;
   const taxableAmount = subtotal - discountAmount + packing + serviceChargeAmount;
 
   // includeGST = true  → GST is already IN item prices (inclusive). Extract for display, don't add to total.
@@ -141,7 +144,24 @@ export default function CustomerSection({
                       <span className="text-[11px] font-bold text-gray-700">+₹{packing.toFixed(2)}</span>
                     </div>
                   )}
-                  {billingRow(<span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Service ({serviceChargePercentage}%)</span>, `+₹${serviceChargeAmount.toFixed(2)}`)}
+                  {serviceChargePercentage > 0 && billingRow(
+                    <span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Service ({serviceChargePercentage}%)</span>,
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[11px] font-bold ${applyServiceCharge ? "text-gray-700" : "text-gray-400 line-through"}`}>
+                        +₹{((subtotal - discountAmount + packing) * serviceChargePercentage / 100).toFixed(2)}
+                      </span>
+                      <button
+                        onClick={() => setApplyServiceCharge(!applyServiceCharge)}
+                        className={`rounded-full px-2 py-0.5 text-[9px] font-black transition ${
+                          applyServiceCharge
+                            ? "bg-red-100 text-red-600 hover:bg-red-200"
+                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                        }`}
+                      >
+                        {applyServiceCharge ? "Opt Out" : "Opted Out"}
+                      </button>
+                    </div>
+                  )}
                   {gstPercentage > 0 && billingRow(
                     `CGST (${gstPercentage / 2}%)${isGSTInclusive ? " incl." : ""}`,
                     `${isGSTInclusive ? "" : "+"}₹${cgst.toFixed(2)}`
@@ -152,10 +172,16 @@ export default function CustomerSection({
                   )}
                   {billingRow(
                     <span className="flex items-center gap-1.5"><Info className="h-3 w-3" /> Round Off</span>,
-                    <label className="flex items-center gap-1.5 cursor-pointer">
-                      <input type="checkbox" checked={roundOff} onChange={() => setRoundOff(!roundOff)} className="h-3.5 w-3.5 accent-red-500" />
-                      <span className="text-[10px] font-semibold text-gray-600">Apply</span>
-                    </label>
+                    <button
+                      onClick={() => setRoundOff(!roundOff)}
+                      className={`rounded-full px-2.5 py-0.5 text-[9px] font-black transition ${
+                        roundOff
+                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                      }`}
+                    >
+                      {roundOff ? "✓ Applied" : "Off"}
+                    </button>
                   )}
                   {billingRow(<span className="text-sm font-black text-red-700">Grand Total</span>, <span className="text-base font-black text-red-600">₹{grandTotal.toFixed(2)}</span>, true)}
                 </div>

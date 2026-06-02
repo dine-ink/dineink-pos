@@ -13,7 +13,7 @@ import {
   createRestaurantTable,
   deleteRestaurantTable,
 } from "@/services/restaurantTableService";
-import { Settings, ArrowLeft, X, Minus, Plus } from "lucide-react";
+import { Settings, ArrowLeft, X, Minus, Plus, Printer } from "lucide-react";
 
 type Props = {
   step: string;
@@ -156,6 +156,46 @@ export default function DineIn({
       await requestItemCancel(itemId);
       if (selectedTable) await fetchExistingOrder(selectedTable.id);
     } catch { /* silent */ }
+  };
+
+  const printKOT = (order: any) => {
+    const items = (order.batches?.flatMap((b: any) => b.items) ?? []).filter((i: any) => i.status !== "CANCELLED");
+    const kotNo = order.orderNo ?? order.id;
+    const time = new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const pw = window.open("", "", "width=400,height=600");
+    if (!pw) return;
+    pw.document.write(`<html><head><title>KOT #${kotNo}</title>
+<style>
+@page{size:80mm auto;margin:0}
+body{margin:0;padding:4px;font-family:monospace;color:black;background:white}
+.c{text-align:center}.d{border-top:1px dashed black;margin:6px 0}
+table{width:100%;border-collapse:collapse}
+td{font-size:12px;padding:2px 0;vertical-align:top}
+.n{width:70%}.q{width:30%;text-align:right;font-weight:bold;font-size:15px}
+@media print{@page{size:80mm auto;margin:0}body{width:72mm}}
+</style></head>
+<body onload="window.print();window.close();">
+<div class="c" style="margin-bottom:4px">
+  <div style="font-size:10px;font-weight:bold;letter-spacing:2px">KITCHEN ORDER TICKET</div>
+  <div style="font-size:18px;font-weight:bold;margin-top:2px">${branchData?.name || "DineInk"}</div>
+</div>
+<div class="d"></div>
+<table>
+  <tr><td><b>Table</b></td><td style="text-align:right;font-size:16px;font-weight:bold">${selectedTable?.name || "-"}</td></tr>
+  <tr><td>KOT #</td><td style="text-align:right;font-weight:bold">${kotNo}</td></tr>
+  <tr><td>Type</td><td style="text-align:right">DINE IN</td></tr>
+  <tr><td>Time</td><td style="text-align:right">${time}</td></tr>
+</table>
+<div class="d"></div>
+<table><tr><td class="n" style="font-size:11px;font-weight:bold">ITEM</td><td class="q" style="font-size:11px">QTY</td></tr></table>
+<div class="d" style="margin:3px 0"></div>
+<table><tbody>
+${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bold;padding:3px 0">${i.itemName}</td><td class="q" style="font-size:18px">${i.quantity}</td></tr>`).join("")}
+</tbody></table>
+<div class="d"></div>
+<div class="c" style="font-size:11px;font-weight:bold">*** KITCHEN COPY ***</div>
+</body></html>`);
+    pw.document.close();
   };
 
   const handleCreateSubTable = async () => {
@@ -662,7 +702,13 @@ export default function DineIn({
                             <div key={order.id} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
                               <div className="flex items-center justify-between mb-1">
                                 <p className="text-[10px] font-black text-gray-700">KOT #{order.orderNo ?? order.id}</p>
-                                <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${badgeCls}`}>{badgeTxt}</span>
+                                <div className="flex items-center gap-1">
+                                  <button onClick={() => printKOT(order)} title="Print KOT"
+                                    className="flex h-5 w-5 items-center justify-center rounded bg-gray-200 text-gray-600 transition hover:bg-red-100 hover:text-red-600">
+                                    <Printer className="h-3 w-3" />
+                                  </button>
+                                  <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${badgeCls}`}>{badgeTxt}</span>
+                                </div>
                               </div>
                               {items.map((item: any, i: number) => (
                                 <p key={i} className="text-[10px] text-gray-500">{item.itemName} × {item.quantity}</p>
@@ -792,9 +838,15 @@ export default function DineIn({
                               <p className="text-xs font-black text-gray-900">KOT #{kotNo}</p>
                               <p className="text-[10px] text-gray-500">Ordered at {placedAt}</p>
                             </div>
-                            <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${badgeCls}`}>
-                              {badgeTxt}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <button onClick={() => printKOT(order)} title="Print KOT"
+                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600">
+                                <Printer className="h-3 w-3" /> KOT
+                              </button>
+                              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${badgeCls}`}>
+                                {badgeTxt}
+                              </span>
+                            </div>
                           </div>
 
                           {/* Items — with per-item cancel request */}
