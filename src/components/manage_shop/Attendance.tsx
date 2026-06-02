@@ -18,7 +18,6 @@ const todayDate = new Date().toLocaleDateString("en-GB", {
 export default function Attendance() {
   const [employees, setEmployees] = useState<any[]>();
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
   const { branch } = useAppSelector((state) => state.auth);
 
   const filteredEmployees = useMemo(() => {
@@ -29,14 +28,14 @@ export default function Attendance() {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
       const data = await getTodayAttendance(branch);
 
       setEmployees(data.data || []);
     } catch (error) {
       console.log(error);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Pencil, Plus, Save, Search, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 import { useAppSelector } from "@/store/hooks";
 
@@ -25,8 +25,8 @@ type Inventory = {
 export default function Inventory() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [ingredients, setIngredients] = useState<any[]>([]);
-  const [users, setUsers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  // const [users, setUsers] = useState<any[]>([]);
+  // const [loading, setLoading] = useState(false);
   const { restaurant, branch, user } = useAppSelector((state) => state.auth);
 
   const [search, setSearch] = useState("");
@@ -156,7 +156,7 @@ export default function Inventory() {
   };
   const fetchData = async () => {
     try {
-      setLoading(true);
+      // setLoading(true);
 
       const [inventoryRes, ingredientRes, usersRes] = await Promise.all([
         getInventoryAdjustments(branch),
@@ -170,11 +170,11 @@ export default function Inventory() {
 
       setIngredients(ingredientRes.data || []);
 
-      setUsers(usersRes.data || []);
+      // setUsers(usersRes.data || []);
     } catch (error) {
       console.log(error);
     } finally {
-      setLoading(false);
+      // setLoading(false);
     }
   };
 

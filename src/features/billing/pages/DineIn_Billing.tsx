@@ -43,7 +43,6 @@ export default function DineIn({
   fetchData,
   loading,
   branchData,
-  billingType,
   runningOrders,
 }: Props) {
   const [selectedCategory, setSelectedCategory] = useState("Best Sellers");
@@ -54,7 +53,9 @@ export default function DineIn({
   const [tableOrders, setTableOrders] = useState<any[]>([]); // all KOTs for selected table
   const { user } = useAppSelector((state) => state.auth);
   const [showModifyTables, setShowModifyTables] = useState(false);
-  const [floorAction, setFloorAction] = useState<"HOME" | "SUB_TABLE" | "MERGE">("HOME");
+  const [floorAction, setFloorAction] = useState<
+    "HOME" | "SUB_TABLE" | "MERGE"
+  >("HOME");
   const [selectedParentTable, setSelectedParentTable] = useState<any>(null);
   const [tempTableName, setTempTableName] = useState("");
   const [tempCapacity, setTempCapacity] = useState("");
@@ -74,7 +75,8 @@ export default function DineIn({
       ? topSellingItems
       : products.filter(
           (p: any) =>
-            categories.find((c: any) => c.id === p.categoryId)?.name === selectedCategory,
+            categories.find((c: any) => c.id === p.categoryId)?.name ===
+            selectedCategory,
         );
 
   const increaseQty = (id: number) =>
@@ -82,37 +84,61 @@ export default function DineIn({
 
   const decreaseQty = (id: number) =>
     setCart((prev: any) => {
-      if ((prev[id] || 0) <= 1) { const u = { ...prev }; delete u[id]; return u; }
+      if ((prev[id] || 0) <= 1) {
+        const u = { ...prev };
+        delete u[id];
+        return u;
+      }
       return { ...prev, [id]: prev[id] - 1 };
     });
 
   const totalItems: number = Object.values(cart).reduce(
-    (acc: any, qty: any) => acc + qty, 0,
+    (acc: any, qty: any) => acc + qty,
+    0,
   ) as number;
   // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
-  const allMenuItems = [...products, ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id))];
+  const allMenuItems = [
+    ...products,
+    ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id)),
+  ];
   const cartItems = allMenuItems.filter((p) => cart[p.id]);
-  const grandTotal = cartItems.reduce((acc, item) => acc + item.price * cart[item.id], 0);
+  const grandTotal = cartItems.reduce(
+    (acc, item) => acc + item.price * cart[item.id],
+    0,
+  );
 
   // Load all KOTs for this table — cart stays empty (new order starts fresh)
   const fetchExistingOrder = async (tableId: number) => {
     try {
       const response = await getRunningOrderByTable(tableId);
-      const orders = Array.isArray(response.data) ? response.data : response.data ? [response.data] : [];
+      const orders = Array.isArray(response.data)
+        ? response.data
+        : response.data
+          ? [response.data]
+          : [];
       setTableOrders(orders);
       setCart({});
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   // Save current cart as a NEW KOT — each save = separate running order in kitchen
   const handleSaveOrder = async () => {
     if (!selectedTable || !cartItems.length) return;
     const items = cartItems.map((item) => ({
-      menuItemId: item.id, itemName: item.name, quantity: cart[item.id], price: item.price,
+      menuItemId: item.id,
+      itemName: item.name,
+      quantity: cart[item.id],
+      price: item.price,
     }));
     const response = await saveRunningOrder({
-      restaurantId: user.restaurantId, branchId: user.branchId, createdById: user.id,
-      tableId: selectedTable.id, items, orderType: "DINE_IN",
+      restaurantId: user.restaurantId,
+      branchId: user.branchId,
+      createdById: user.id,
+      tableId: selectedTable.id,
+      items,
+      orderType: "DINE_IN",
     });
     if (response.success) {
       setCart({});
@@ -129,7 +155,9 @@ export default function DineIn({
         tableId: selectedTable.id,
         restaurantId: user.restaurantId,
         branchId: user.branchId,
-        customerName, customerPhone, customerAddress,
+        customerName,
+        customerPhone,
+        customerAddress,
         paymentMethod: billingData.paymentMethod,
         orderType: "DINE_IN",
         subtotal: billingData.subtotal,
@@ -142,12 +170,18 @@ export default function DineIn({
         finalAmount: billingData.grandTotal,
       });
       if (response.success) {
-        setCart({}); setTableOrders([]);
-        setCustomerName(""); setCustomerPhone(""); setCustomerAddress("");
-        setSelectedTable(null); setStep("MENU");
+        setCart({});
+        setTableOrders([]);
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setSelectedTable(null);
+        setStep("MENU");
         await fetchData();
       }
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   // Request item cancellation — kitchen will approve or reject
@@ -155,13 +189,20 @@ export default function DineIn({
     try {
       await requestItemCancel(itemId);
       if (selectedTable) await fetchExistingOrder(selectedTable.id);
-    } catch { /* silent */ }
+    } catch {
+      /* silent */
+    }
   };
 
   const printKOT = (order: any) => {
-    const items = (order.batches?.flatMap((b: any) => b.items) ?? []).filter((i: any) => i.status !== "CANCELLED");
+    const items = (order.batches?.flatMap((b: any) => b.items) ?? []).filter(
+      (i: any) => i.status !== "CANCELLED",
+    );
     const kotNo = order.orderNo ?? order.id;
-    const time = new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const time = new Date(order.createdAt).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
     const pw = window.open("", "", "width=400,height=600");
     if (!pw) return;
     pw.document.write(`<html><head><title>KOT #${kotNo}</title>
@@ -201,12 +242,20 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
   const handleCreateSubTable = async () => {
     if (!selectedParentTable || !tempTableName) return;
     await createRestaurantTable({
-      name: tempTableName, capacity: Number(tempCapacity), status: "AVAILABLE",
-      isTemporary: true, tempTableType: "SPLIT", parentTableIds: String(selectedParentTable.id),
-      restaurantId: user.restaurantId, branchId: user.branchId,
+      name: tempTableName,
+      capacity: Number(tempCapacity),
+      status: "AVAILABLE",
+      isTemporary: true,
+      tempTableType: "SPLIT",
+      parentTableIds: String(selectedParentTable.id),
+      restaurantId: user.restaurantId,
+      branchId: user.branchId,
     });
-    setTempTableName(""); setTempCapacity(""); setSelectedParentTable(null);
-    setFloorAction("HOME"); await fetchData();
+    setTempTableName("");
+    setTempCapacity("");
+    setSelectedParentTable(null);
+    setFloorAction("HOME");
+    await fetchData();
   };
 
   const handleCreateMergeTable = async () => {
@@ -214,39 +263,67 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
     await createRestaurantTable({
       name: mergeTables.map((t) => t.name).join("-"),
       capacity: mergeTables.reduce((acc, t) => acc + (t.capacity || 0), 0),
-      status: "AVAILABLE", isTemporary: true, tempTableType: "MERGE",
+      status: "AVAILABLE",
+      isTemporary: true,
+      tempTableType: "MERGE",
       parentTableIds: mergeTables.map((t) => t.id).join(","),
-      restaurantId: user.restaurantId, branchId: user.branchId,
+      restaurantId: user.restaurantId,
+      branchId: user.branchId,
     });
-    setMergeTables([]); setFloorAction("HOME"); await fetchData();
+    setMergeTables([]);
+    setFloorAction("HOME");
+    await fetchData();
   };
 
-  const getTableColorState = (tableId: number): "available" | "in_kitchen" | "ready_to_serve" | "occupied" => {
+  const getTableColorState = (
+    tableId: number,
+  ): "available" | "in_kitchen" | "ready_to_serve" | "occupied" => {
     const tableOrders = runningOrders.filter((o: any) => o.tableId === tableId);
     if (tableOrders.length === 0) return "available";
-    if (tableOrders.some((o: any) => !o.status || o.status === "PENDING" || o.status === "NEW" || o.status === "PREPARING")) return "in_kitchen";
-    if (tableOrders.some((o: any) => o.status === "READY")) return "ready_to_serve";
+    if (
+      tableOrders.some(
+        (o: any) =>
+          !o.status ||
+          o.status === "PENDING" ||
+          o.status === "NEW" ||
+          o.status === "PREPARING",
+      )
+    )
+      return "in_kitchen";
+    if (tableOrders.some((o: any) => o.status === "READY"))
+      return "ready_to_serve";
     return "occupied"; // all DELIVERED — customer eating, bill not closed
   };
 
-  const selectedTableColorState = selectedTable && !selectedTable.isTemporary
-    ? getTableColorState(selectedTable.id)
-    : null;
+  const selectedTableColorState =
+    selectedTable && !selectedTable.isTemporary
+      ? getTableColorState(selectedTable.id)
+      : null;
 
   const handleMarkDelivered = async () => {
     if (!selectedTable) return;
     const readyOrders = runningOrders.filter(
       (o: any) => o.tableId === selectedTable.id && o.status === "READY",
     );
-    await Promise.all(readyOrders.map((o: any) => updateRunningOrderStatus(o.id, "DELIVERED")));
+    await Promise.all(
+      readyOrders.map((o: any) => updateRunningOrderStatus(o.id, "DELIVERED")),
+    );
     await fetchData();
   };
 
   const nonTempTables = tables.filter((t) => !t.isTemporary);
-  const availableCount = nonTempTables.filter((t) => getTableColorState(t.id) === "available").length;
-  const inKitchenCount = nonTempTables.filter((t) => getTableColorState(t.id) === "in_kitchen").length;
-  const readyToServeCount = nonTempTables.filter((t) => getTableColorState(t.id) === "ready_to_serve").length;
-  const occupiedCount = nonTempTables.filter((t) => getTableColorState(t.id) === "occupied").length;
+  const availableCount = nonTempTables.filter(
+    (t) => getTableColorState(t.id) === "available",
+  ).length;
+  const inKitchenCount = nonTempTables.filter(
+    (t) => getTableColorState(t.id) === "in_kitchen",
+  ).length;
+  const readyToServeCount = nonTempTables.filter(
+    (t) => getTableColorState(t.id) === "ready_to_serve",
+  ).length;
+  const occupiedCount = nonTempTables.filter(
+    (t) => getTableColorState(t.id) === "occupied",
+  ).length;
   const tempCount = tables.filter((t) => t.isTemporary).length;
 
   return (
@@ -261,7 +338,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 <h2 className="text-sm font-black tracking-tight text-gray-900">
                   Restaurant Floor
                 </h2>
-                <p className="text-[10px] text-gray-500">Select a table to begin</p>
+                <p className="text-[10px] text-gray-500">
+                  Select a table to begin
+                </p>
               </div>
               <div className="flex items-center gap-1.5">
                 {/* STATUS BADGES */}
@@ -289,7 +368,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {/* FLOOR MGMT BUTTON — Manager/Cashier only */}
                 {canCheckout && (
                   <button
-                    onClick={() => { setShowModifyTables(true); setFloorAction("HOME"); }}
+                    onClick={() => {
+                      setShowModifyTables(true);
+                      setFloorAction("HOME");
+                    }}
                     className="flex items-center gap-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-red-600 active:scale-95"
                   >
                     <Settings className="h-3 w-3" />
@@ -306,7 +388,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
             <div className="flex-1 min-h-0 overflow-y-auto p-2">
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
                 {tables.map((table) => {
-                  const colorState = table.isTemporary ? null : getTableColorState(table.id);
+                  const colorState = table.isTemporary
+                    ? null
+                    : getTableColorState(table.id);
                   const isTemp = table.isTemporary;
                   const isMerge = table.tempTableType === "MERGE";
 
@@ -317,29 +401,49 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   let label = "Available";
 
                   if (isTemp && isMerge) {
-                    borderColor = "border-orange-200"; bgColor = "from-white to-orange-50";
-                    dotColor = "bg-orange-500"; labelBg = "bg-orange-100 text-orange-700"; label = "Merged";
+                    borderColor = "border-orange-200";
+                    bgColor = "from-white to-orange-50";
+                    dotColor = "bg-orange-500";
+                    labelBg = "bg-orange-100 text-orange-700";
+                    label = "Merged";
                   } else if (isTemp) {
-                    borderColor = "border-purple-200"; bgColor = "from-white to-purple-50";
-                    dotColor = "bg-purple-500"; labelBg = "bg-purple-100 text-purple-700"; label = "Split";
+                    borderColor = "border-purple-200";
+                    bgColor = "from-white to-purple-50";
+                    dotColor = "bg-purple-500";
+                    labelBg = "bg-purple-100 text-purple-700";
+                    label = "Split";
                   } else if (colorState === "in_kitchen") {
-                    borderColor = "border-amber-200"; bgColor = "from-white to-amber-50";
-                    dotColor = "bg-amber-500"; labelBg = "bg-amber-100 text-amber-700"; label = "In Kitchen";
+                    borderColor = "border-amber-200";
+                    bgColor = "from-white to-amber-50";
+                    dotColor = "bg-amber-500";
+                    labelBg = "bg-amber-100 text-amber-700";
+                    label = "In Kitchen";
                   } else if (colorState === "ready_to_serve") {
-                    borderColor = "border-blue-300"; bgColor = "from-white to-blue-50";
-                    dotColor = "bg-blue-500"; labelBg = "bg-blue-100 text-blue-700"; label = "Ready!";
+                    borderColor = "border-blue-300";
+                    bgColor = "from-white to-blue-50";
+                    dotColor = "bg-blue-500";
+                    labelBg = "bg-blue-100 text-blue-700";
+                    label = "Ready!";
                   } else if (colorState === "occupied") {
-                    borderColor = "border-red-200"; bgColor = "from-white to-red-50";
-                    dotColor = "bg-red-500"; labelBg = "bg-red-100 text-red-700"; label = "Occupied";
+                    borderColor = "border-red-200";
+                    bgColor = "from-white to-red-50";
+                    dotColor = "bg-red-500";
+                    labelBg = "bg-red-100 text-red-700";
+                    label = "Occupied";
                   }
 
                   return (
                     <button
                       key={table.id}
                       onClick={async () => {
-                        setSelectedTable(table); setStep("MENU");
-                        if (colorState && colorState !== "available") await fetchExistingOrder(table.id);
-                        else { setCart({}); setTableOrders([]); }
+                        setSelectedTable(table);
+                        setStep("MENU");
+                        if (colorState && colorState !== "available")
+                          await fetchExistingOrder(table.id);
+                        else {
+                          setCart({});
+                          setTableOrders([]);
+                        }
                       }}
                       className={`relative flex flex-col justify-between overflow-hidden rounded-xl border-2 p-2.5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md bg-gradient-to-br ${borderColor} ${bgColor}`}
                     >
@@ -347,7 +451,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       <div className="flex items-start justify-between">
                         <div>
                           {isTemp && (
-                            <div className={`mb-1 inline-flex rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${labelBg}`}>
+                            <div
+                              className={`mb-1 inline-flex rounded-full px-1.5 py-0.5 text-[7px] font-black uppercase ${labelBg}`}
+                            >
                               {isMerge ? "Merge" : "Split"}
                             </div>
                           )}
@@ -360,12 +466,18 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
 
                       {/* BOTTOM ROW */}
                       <div className="flex items-end justify-between mt-1.5">
-                        <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${labelBg}`}>
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${labelBg}`}
+                        >
                           {label}
                         </span>
                         <div className="text-right">
-                          <p className="text-xs font-black text-gray-900">{table.capacity}</p>
-                          <p className="text-[7px] font-bold uppercase text-gray-400">seats</p>
+                          <p className="text-xs font-black text-gray-900">
+                            {table.capacity}
+                          </p>
+                          <p className="text-[7px] font-bold uppercase text-gray-400">
+                            seats
+                          </p>
                         </div>
                       </div>
                     </button>
@@ -377,15 +489,24 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
             {/* DESKTOP LIVE OPS PANEL */}
             <div className="hidden xl:flex xl:w-[220px] shrink-0 flex-col border-l border-gray-100 overflow-y-auto">
               <div className="p-3 border-b border-gray-100">
-                <h3 className="text-xs font-black text-gray-900">Live Operations</h3>
-                <p className="text-[10px] text-gray-500 mt-0.5">Floor activity</p>
+                <h3 className="text-xs font-black text-gray-900">
+                  Live Operations
+                </h3>
+                <p className="text-[10px] text-gray-500 mt-0.5">
+                  Floor activity
+                </p>
               </div>
               <div className="p-3 space-y-3">
                 {/* OCCUPANCY */}
                 <div className="rounded-xl bg-gradient-to-br from-red-500 to-red-600 p-3 text-white">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">Occupancy</p>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">
+                    Occupancy
+                  </p>
                   <h2 className="mt-1 text-3xl font-black">
-                    {tables.length > 0 ? Math.round((occupiedCount / tables.length) * 100) : 0}%
+                    {tables.length > 0
+                      ? Math.round((occupiedCount / tables.length) * 100)
+                      : 0}
+                    %
                   </h2>
                   <p className="text-[10px] text-red-100 mt-0.5">
                     {occupiedCount} of {tables.length} tables
@@ -395,22 +516,37 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {/* ACTIVE TABLES */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-black text-gray-900">Active Tables</h4>
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-700">{occupiedCount}</span>
+                    <h4 className="text-xs font-black text-gray-900">
+                      Active Tables
+                    </h4>
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-700">
+                      {occupiedCount}
+                    </span>
                   </div>
                   <div className="space-y-1.5">
-                    {tables.filter((t) => t.status === "OCCUPIED").map((table) => (
-                      <div key={table.id} className="rounded-xl border border-red-100 bg-red-50 px-2.5 py-2">
-                        <div className="flex items-center justify-between">
-                          <h5 className="text-xs font-black text-gray-900">{table.name}</h5>
-                          <span className="text-[10px] font-bold text-red-600">{table.capacity}s</span>
+                    {tables
+                      .filter((t) => t.status === "OCCUPIED")
+                      .map((table) => (
+                        <div
+                          key={table.id}
+                          className="rounded-xl border border-red-100 bg-red-50 px-2.5 py-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-xs font-black text-gray-900">
+                              {table.name}
+                            </h5>
+                            <span className="text-[10px] font-bold text-red-600">
+                              {table.capacity}s
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
                     {occupiedCount === 0 && (
                       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6">
                         <span className="text-xl">🍽</span>
-                        <p className="mt-1.5 text-[10px] font-bold text-gray-500">No active tables</p>
+                        <p className="mt-1.5 text-[10px] font-bold text-gray-500">
+                          No active tables
+                        </p>
                       </div>
                     )}
                   </div>
@@ -424,16 +560,26 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
       {/* ===== FLOOR MANAGEMENT DRAWER ===== */}
       {showModifyTables && (
         <>
-          <div onClick={() => setShowModifyTables(false)} className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm" />
+          <div
+            onClick={() => setShowModifyTables(false)}
+            className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm"
+          />
           <div className="fixed bottom-0 right-0 z-[1000] flex flex-col overflow-hidden bg-white shadow-2xl h-[88vh] w-full rounded-t-2xl xl:top-0 xl:h-screen xl:w-[360px] xl:rounded-none xl:border-l xl:border-gray-200">
             {/* HEADER */}
             <div className="shrink-0 bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">Restaurant</p>
-                  <h2 className="text-lg font-black mt-0.5">Floor Management</h2>
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">
+                    Restaurant
+                  </p>
+                  <h2 className="text-lg font-black mt-0.5">
+                    Floor Management
+                  </h2>
                 </div>
-                <button onClick={() => setShowModifyTables(false)} className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 transition hover:bg-white/30">
+                <button
+                  onClick={() => setShowModifyTables(false)}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 transition hover:bg-white/30"
+                >
                   <X className="h-4 w-4" />
                 </button>
               </div>
@@ -444,25 +590,41 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               {/* HOME */}
               {floorAction === "HOME" && (
                 <div className="space-y-2">
-                  <button onClick={() => setFloorAction("SUB_TABLE")}
-                    className="w-full rounded-xl border border-purple-100 bg-gradient-to-br from-white to-purple-50 p-3 text-left transition hover:shadow-lg">
+                  <button
+                    onClick={() => setFloorAction("SUB_TABLE")}
+                    className="w-full rounded-xl border border-purple-100 bg-gradient-to-br from-white to-purple-50 p-3 text-left transition hover:shadow-lg"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-purple-500">Split Billing</p>
-                        <h3 className="mt-0.5 text-sm font-black text-gray-900">Create Sub Table</h3>
-                        <p className="text-[10px] text-gray-500">Create 1A, 1B temporary tables</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-purple-500">
+                          Split Billing
+                        </p>
+                        <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                          Create Sub Table
+                        </h3>
+                        <p className="text-[10px] text-gray-500">
+                          Create 1A, 1B temporary tables
+                        </p>
                       </div>
                       <span className="text-2xl">🍽</span>
                     </div>
                   </button>
 
-                  <button onClick={() => setFloorAction("MERGE")}
-                    className="w-full rounded-xl border border-orange-100 bg-gradient-to-br from-white to-orange-50 p-3 text-left transition hover:shadow-lg">
+                  <button
+                    onClick={() => setFloorAction("MERGE")}
+                    className="w-full rounded-xl border border-orange-100 bg-gradient-to-br from-white to-orange-50 p-3 text-left transition hover:shadow-lg"
+                  >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-orange-500">Family Seating</p>
-                        <h3 className="mt-0.5 text-sm font-black text-gray-900">Merge Tables</h3>
-                        <p className="text-[10px] text-gray-500">Combine multiple tables together</p>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-orange-500">
+                          Family Seating
+                        </p>
+                        <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                          Merge Tables
+                        </h3>
+                        <p className="text-[10px] text-gray-500">
+                          Combine multiple tables together
+                        </p>
                       </div>
                       <span className="text-2xl">🪑</span>
                     </div>
@@ -471,39 +633,73 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {/* TEMP TABLES LIST */}
                   <div className="pt-1">
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-xs font-black text-gray-900">Temporary Tables</h3>
-                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black text-purple-700">{tempCount} active</span>
+                      <h3 className="text-xs font-black text-gray-900">
+                        Temporary Tables
+                      </h3>
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black text-purple-700">
+                        {tempCount} active
+                      </span>
                     </div>
                     <div className="space-y-1.5">
-                      {tables.filter((t) => t.isTemporary).map((table) => (
-                        <div key={table.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
-                          <div className="flex items-start justify-between">
-                            <div>
-                              <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${table.tempTableType === "MERGE" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}>
-                                {table.tempTableType === "MERGE" ? "Merged" : "Split"}
+                      {tables
+                        .filter((t) => t.isTemporary)
+                        .map((table) => (
+                          <div
+                            key={table.id}
+                            className="rounded-xl border border-gray-100 bg-gray-50 p-3"
+                          >
+                            <div className="flex items-start justify-between">
+                              <div>
+                                <span
+                                  className={`rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase ${table.tempTableType === "MERGE" ? "bg-orange-100 text-orange-700" : "bg-purple-100 text-purple-700"}`}
+                                >
+                                  {table.tempTableType === "MERGE"
+                                    ? "Merged"
+                                    : "Split"}
+                                </span>
+                                <h4 className="mt-1 text-base font-black text-gray-900">
+                                  {table.name}
+                                </h4>
+                                <p className="text-[10px] text-gray-500">
+                                  Parent: {table.parentTableIds}
+                                </p>
+                              </div>
+                              <span className="text-xs font-black text-gray-700">
+                                {table.capacity} seats
                               </span>
-                              <h4 className="mt-1 text-base font-black text-gray-900">{table.name}</h4>
-                              <p className="text-[10px] text-gray-500">Parent: {table.parentTableIds}</p>
                             </div>
-                            <span className="text-xs font-black text-gray-700">{table.capacity} seats</span>
+                            <div className="mt-2 flex gap-1.5">
+                              <button
+                                onClick={() => {
+                                  setSelectedTable(table);
+                                  setShowModifyTables(false);
+                                  setStep("MENU");
+                                }}
+                                className="flex-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-black text-gray-700 shadow-sm border border-gray-200"
+                              >
+                                Open
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  await deleteRestaurantTable(table.id);
+                                  await fetchData();
+                                }}
+                                className="rounded-lg border border-red-100 bg-red-50 px-2 py-1.5 text-[11px] font-black text-red-600"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </div>
-                          <div className="mt-2 flex gap-1.5">
-                            <button onClick={() => { setSelectedTable(table); setShowModifyTables(false); setStep("MENU"); }}
-                              className="flex-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-black text-gray-700 shadow-sm border border-gray-200">
-                              Open
-                            </button>
-                            <button onClick={async () => { await deleteRestaurantTable(table.id); await fetchData(); }}
-                              className="rounded-lg border border-red-100 bg-red-50 px-2 py-1.5 text-[11px] font-black text-red-600">
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
+                        ))}
                       {tempCount === 0 && (
                         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-8">
                           <span className="text-2xl">🪑</span>
-                          <p className="mt-2 text-xs font-black text-gray-700">No Temporary Tables</p>
-                          <p className="mt-0.5 text-[10px] text-gray-400">Split & merged tables appear here</p>
+                          <p className="mt-2 text-xs font-black text-gray-700">
+                            No Temporary Tables
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-gray-400">
+                            Split & merged tables appear here
+                          </p>
                         </div>
                       )}
                     </div>
@@ -514,34 +710,63 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               {/* SUB TABLE */}
               {floorAction === "SUB_TABLE" && (
                 <div>
-                  <button onClick={() => setFloorAction("HOME")} className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm">
+                  <button
+                    onClick={() => setFloorAction("HOME")}
+                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm"
+                  >
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
                   <div className="space-y-3">
                     <div>
-                      <label className="mb-1.5 block text-xs font-black text-gray-700">Select Parent Table</label>
+                      <label className="mb-1.5 block text-xs font-black text-gray-700">
+                        Select Parent Table
+                      </label>
                       <div className="grid grid-cols-3 gap-1.5">
-                        {tables.filter((t) => !t.isTemporary).map((table) => (
-                          <button key={table.id} onClick={() => setSelectedParentTable(table)}
-                            className={`rounded-lg border p-2.5 text-left transition ${selectedParentTable?.id === table.id ? "border-red-500 bg-red-50" : "border-gray-200 bg-white"}`}>
-                            <h4 className="text-sm font-black text-gray-900">{table.name}</h4>
-                            <p className="text-[10px] text-gray-500">{table.capacity} seats</p>
-                          </button>
-                        ))}
+                        {tables
+                          .filter((t) => !t.isTemporary)
+                          .map((table) => (
+                            <button
+                              key={table.id}
+                              onClick={() => setSelectedParentTable(table)}
+                              className={`rounded-lg border p-2.5 text-left transition ${selectedParentTable?.id === table.id ? "border-red-500 bg-red-50" : "border-gray-200 bg-white"}`}
+                            >
+                              <h4 className="text-sm font-black text-gray-900">
+                                {table.name}
+                              </h4>
+                              <p className="text-[10px] text-gray-500">
+                                {table.capacity} seats
+                              </p>
+                            </button>
+                          ))}
                       </div>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-black text-gray-700">Sub Table Name</label>
-                      <input value={tempTableName} onChange={(e) => setTempTableName(e.target.value)} placeholder="e.g. 1A"
-                        className="h-9 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-red-400" />
+                      <label className="mb-1 block text-xs font-black text-gray-700">
+                        Sub Table Name
+                      </label>
+                      <input
+                        value={tempTableName}
+                        onChange={(e) => setTempTableName(e.target.value)}
+                        placeholder="e.g. 1A"
+                        className="h-9 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-red-400"
+                      />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-black text-gray-700">Seats</label>
-                      <input value={tempCapacity} onChange={(e) => setTempCapacity(e.target.value)} placeholder="2" type="number"
-                        className="h-9 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-red-400" />
+                      <label className="mb-1 block text-xs font-black text-gray-700">
+                        Seats
+                      </label>
+                      <input
+                        value={tempCapacity}
+                        onChange={(e) => setTempCapacity(e.target.value)}
+                        placeholder="2"
+                        type="number"
+                        className="h-9 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-red-400"
+                      />
                     </div>
-                    <button onClick={handleCreateSubTable}
-                      className="h-9 w-full rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-xs font-black text-white shadow-lg transition active:scale-[0.99]">
+                    <button
+                      onClick={handleCreateSubTable}
+                      className="h-9 w-full rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-xs font-black text-white shadow-lg transition active:scale-[0.99]"
+                    >
                       Create Sub Table
                     </button>
                   </div>
@@ -551,33 +776,68 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               {/* MERGE */}
               {floorAction === "MERGE" && (
                 <div>
-                  <button onClick={() => setFloorAction("HOME")} className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm">
+                  <button
+                    onClick={() => setFloorAction("HOME")}
+                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm"
+                  >
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
-                  <label className="mb-2 block text-xs font-black text-gray-700">Select Tables to Merge</label>
+                  <label className="mb-2 block text-xs font-black text-gray-700">
+                    Select Tables to Merge
+                  </label>
                   <div className="grid grid-cols-3 gap-1.5">
-                    {tables.filter((t) => !t.isTemporary).map((table) => {
-                      const active = mergeTables.some((t) => t.id === table.id);
-                      return (
-                        <button key={table.id}
-                          onClick={() => { if (active) setMergeTables((prev) => prev.filter((t) => t.id !== table.id)); else setMergeTables((prev) => [...prev, table]); }}
-                          className={`relative rounded-lg border p-2.5 text-left transition ${active ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"}`}>
-                          {active && <div className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-500 text-[8px] font-black text-white">✓</div>}
-                          <h4 className="text-sm font-black text-gray-900">{table.name}</h4>
-                          <p className="text-[10px] text-gray-500">{table.capacity} seats</p>
-                        </button>
-                      );
-                    })}
+                    {tables
+                      .filter((t) => !t.isTemporary)
+                      .map((table) => {
+                        const active = mergeTables.some(
+                          (t) => t.id === table.id,
+                        );
+                        return (
+                          <button
+                            key={table.id}
+                            onClick={() => {
+                              if (active)
+                                setMergeTables((prev) =>
+                                  prev.filter((t) => t.id !== table.id),
+                                );
+                              else setMergeTables((prev) => [...prev, table]);
+                            }}
+                            className={`relative rounded-lg border p-2.5 text-left transition ${active ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"}`}
+                          >
+                            {active && (
+                              <div className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-500 text-[8px] font-black text-white">
+                                ✓
+                              </div>
+                            )}
+                            <h4 className="text-sm font-black text-gray-900">
+                              {table.name}
+                            </h4>
+                            <p className="text-[10px] text-gray-500">
+                              {table.capacity} seats
+                            </p>
+                          </button>
+                        );
+                      })}
                   </div>
                   {mergeTables.length > 0 && (
                     <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-wide text-orange-600">Preview</p>
-                      <h3 className="mt-0.5 text-lg font-black text-gray-900">{mergeTables.map((t) => t.name).join("-")}</h3>
-                      <p className="text-[10px] text-gray-600">Total: {mergeTables.reduce((acc, t) => acc + t.capacity, 0)} seats</p>
+                      <p className="text-[9px] font-black uppercase tracking-wide text-orange-600">
+                        Preview
+                      </p>
+                      <h3 className="mt-0.5 text-lg font-black text-gray-900">
+                        {mergeTables.map((t) => t.name).join("-")}
+                      </h3>
+                      <p className="text-[10px] text-gray-600">
+                        Total:{" "}
+                        {mergeTables.reduce((acc, t) => acc + t.capacity, 0)}{" "}
+                        seats
+                      </p>
                     </div>
                   )}
-                  <button onClick={handleCreateMergeTable}
-                    className="mt-3 h-9 w-full rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-xs font-black text-white shadow-lg transition active:scale-[0.99]">
+                  <button
+                    onClick={handleCreateMergeTable}
+                    className="mt-3 h-9 w-full rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-xs font-black text-white shadow-lg transition active:scale-[0.99]"
+                  >
                     Create Merge Table
                   </button>
                 </div>
@@ -597,10 +857,17 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {/* Mobile table info */}
                 <div className="xl:hidden shrink-0 mb-1.5 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm">
                   <div>
-                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">Selected Table</p>
-                    <h3 className="text-sm font-black text-gray-900 leading-tight">{selectedTable.name}</h3>
+                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">
+                      Selected Table
+                    </p>
+                    <h3 className="text-sm font-black text-gray-900 leading-tight">
+                      {selectedTable.name}
+                    </h3>
                   </div>
-                  <button onClick={() => setSelectedTable(null)} className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 shadow-sm">
+                  <button
+                    onClick={() => setSelectedTable(null)}
+                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 shadow-sm"
+                  >
                     Change
                   </button>
                 </div>
@@ -610,10 +877,14 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   <div className="xl:hidden shrink-0 mb-1.5 flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                      <p className="text-xs font-black text-blue-700">Order ready in kitchen!</p>
+                      <p className="text-xs font-black text-blue-700">
+                        Order ready in kitchen!
+                      </p>
                     </div>
-                    <button onClick={handleMarkDelivered}
-                      className="rounded-lg bg-blue-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-blue-600 active:scale-95">
+                    <button
+                      onClick={handleMarkDelivered}
+                      className="rounded-lg bg-blue-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-blue-600 active:scale-95"
+                    >
                       Mark Delivered
                     </button>
                   </div>
@@ -621,8 +892,15 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
 
                 {/* Menu section */}
                 <div className="flex-1 min-h-0 overflow-hidden">
-                  <MenuSection categories={categories} selectedCategory={selectedCategory} setSelectedCategory={setSelectedCategory}
-                    filteredProducts={filteredProducts} activeCart={cart} increaseQty={increaseQty} decreaseQty={decreaseQty} />
+                  <MenuSection
+                    categories={categories}
+                    selectedCategory={selectedCategory}
+                    setSelectedCategory={setSelectedCategory}
+                    filteredProducts={filteredProducts}
+                    activeCart={cart}
+                    increaseQty={increaseQty}
+                    decreaseQty={decreaseQty}
+                  />
                 </div>
 
                 {/* Mobile action bar */}
@@ -630,27 +908,40 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wide">
-                        {tableOrders.length > 0 ? `${tableOrders.length} KOT · Table total` : "New order"}
+                        {tableOrders.length > 0
+                          ? `${tableOrders.length} KOT · Table total`
+                          : "New order"}
                       </p>
                       <p className="text-sm font-black text-gray-900">
                         {totalItems > 0 && <span>{totalItems} items · </span>}
                         <span className="text-red-600">
-                          ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) + grandTotal}
+                          ₹
+                          {tableOrders.reduce(
+                            (s, o) => s + (o.totalAmount || 0),
+                            0,
+                          ) + grandTotal}
                         </span>
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <button onClick={handleSaveOrder} disabled={loading || !cartItems.length}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm disabled:opacity-50">
+                      <button
+                        onClick={handleSaveOrder}
+                        disabled={loading || !cartItems.length}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm disabled:opacity-50"
+                      >
                         {loading ? "Saving..." : "Save"}
                       </button>
-                      <button onClick={() => setStep("CART")}
-                        className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-600">
+                      <button
+                        onClick={() => setStep("CART")}
+                        className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-600"
+                      >
                         Cart
                       </button>
                       {canCheckout && tableOrders.length > 0 && (
-                        <button onClick={() => setStep("CUSTOMER")}
-                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600">
+                        <button
+                          onClick={() => setStep("CUSTOMER")}
+                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"
+                        >
                           Bill
                         </button>
                       )}
@@ -666,10 +957,14 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                      <p className="text-[11px] font-black text-blue-700">Ready in kitchen!</p>
+                      <p className="text-[11px] font-black text-blue-700">
+                        Ready in kitchen!
+                      </p>
                     </div>
-                    <button onClick={handleMarkDelivered}
-                      className="rounded-lg bg-blue-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-blue-600">
+                    <button
+                      onClick={handleMarkDelivered}
+                      className="rounded-lg bg-blue-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-blue-600"
+                    >
                       Delivered
                     </button>
                   </div>
@@ -678,10 +973,17 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 <div className="shrink-0 border-b border-gray-100 px-3 py-2.5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">Current Order</p>
-                      <h3 className="text-base font-black text-gray-900 mt-0.5">{selectedTable.name}</h3>
+                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                        Current Order
+                      </p>
+                      <h3 className="text-base font-black text-gray-900 mt-0.5">
+                        {selectedTable.name}
+                      </h3>
                     </div>
-                    <button onClick={() => setSelectedTable(null)} className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50">
+                    <button
+                      onClick={() => setSelectedTable(null)}
+                      className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50"
+                    >
                       Change
                     </button>
                   </div>
@@ -691,29 +993,61 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {/* Past KOTs for this table */}
                   {tableOrders.length > 0 && (
                     <div>
-                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">Order History</p>
+                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                        Order History
+                      </p>
                       <div className="space-y-1.5">
                         {tableOrders.map((order: any) => {
                           const s = order.kitchenStatus;
-                          const badgeCls = s === "DELIVERED" ? "bg-emerald-100 text-emerald-700" : s === "READY" ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700";
-                          const badgeTxt = s === "DELIVERED" ? "Delivered" : s === "READY" ? "Ready" : "In Kitchen";
-                          const items = order.batches?.flatMap((b: any) => b.items) ?? [];
+                          const badgeCls =
+                            s === "DELIVERED"
+                              ? "bg-emerald-100 text-emerald-700"
+                              : s === "READY"
+                                ? "bg-blue-100 text-blue-700"
+                                : "bg-amber-100 text-amber-700";
+                          const badgeTxt =
+                            s === "DELIVERED"
+                              ? "Delivered"
+                              : s === "READY"
+                                ? "Ready"
+                                : "In Kitchen";
+                          const items =
+                            order.batches?.flatMap((b: any) => b.items) ?? [];
                           return (
-                            <div key={order.id} className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2">
+                            <div
+                              key={order.id}
+                              className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2"
+                            >
                               <div className="flex items-center justify-between mb-1">
-                                <p className="text-[10px] font-black text-gray-700">KOT #{order.orderNo ?? order.id}</p>
+                                <p className="text-[10px] font-black text-gray-700">
+                                  KOT #{order.orderNo ?? order.id}
+                                </p>
                                 <div className="flex items-center gap-1">
-                                  <button onClick={() => printKOT(order)} title="Print KOT"
-                                    className="flex h-5 w-5 items-center justify-center rounded bg-gray-200 text-gray-600 transition hover:bg-red-100 hover:text-red-600">
+                                  <button
+                                    onClick={() => printKOT(order)}
+                                    title="Print KOT"
+                                    className="flex h-5 w-5 items-center justify-center rounded bg-gray-200 text-gray-600 transition hover:bg-red-100 hover:text-red-600"
+                                  >
                                     <Printer className="h-3 w-3" />
                                   </button>
-                                  <span className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${badgeCls}`}>{badgeTxt}</span>
+                                  <span
+                                    className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${badgeCls}`}
+                                  >
+                                    {badgeTxt}
+                                  </span>
                                 </div>
                               </div>
                               {items.map((item: any, i: number) => (
-                                <p key={i} className="text-[10px] text-gray-500">{item.itemName} × {item.quantity}</p>
+                                <p
+                                  key={i}
+                                  className="text-[10px] text-gray-500"
+                                >
+                                  {item.itemName} × {item.quantity}
+                                </p>
                               ))}
-                              <p className="mt-0.5 text-right text-[10px] font-black text-red-600">₹{order.totalAmount}</p>
+                              <p className="mt-0.5 text-right text-[10px] font-black text-red-600">
+                                ₹{order.totalAmount}
+                              </p>
                             </div>
                           );
                         })}
@@ -723,15 +1057,26 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {/* Current unsaved cart */}
                   {cartItems.length > 0 && (
                     <div>
-                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">New Order</p>
+                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                        New Order
+                      </p>
                       <div className="space-y-1.5">
                         {cartItems.map((item: any) => (
-                          <div key={item.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-2.5 py-2">
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-2.5 py-2"
+                          >
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold text-gray-900">{item.name}</p>
-                              <p className="text-[10px] text-gray-500">× {cart[item.id]}</p>
+                              <p className="truncate text-xs font-semibold text-gray-900">
+                                {item.name}
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                × {cart[item.id]}
+                              </p>
                             </div>
-                            <p className="ml-2 shrink-0 text-xs font-black text-red-600">₹{item.price * cart[item.id]}</p>
+                            <p className="ml-2 shrink-0 text-xs font-black text-red-600">
+                              ₹{item.price * cart[item.id]}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -740,7 +1085,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {tableOrders.length === 0 && cartItems.length === 0 && (
                     <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 p-6 text-center">
                       <span className="text-2xl">🛒</span>
-                      <p className="mt-2 text-xs font-bold text-gray-500">No items yet</p>
+                      <p className="mt-2 text-xs font-bold text-gray-500">
+                        No items yet
+                      </p>
                     </div>
                   )}
                 </div>
@@ -750,24 +1097,39 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <div>
                       <p className="text-[10px] text-gray-500">Table Total</p>
                       <p className="text-lg font-black text-red-600">
-                        ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) + grandTotal}
+                        ₹
+                        {tableOrders.reduce(
+                          (s, o) => s + (o.totalAmount || 0),
+                          0,
+                        ) + grandTotal}
                       </p>
                     </div>
                     <div className="flex gap-1.5">
-                      <button onClick={handleSaveOrder} disabled={loading || !cartItems.length}
-                        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50">
+                      <button
+                        onClick={handleSaveOrder}
+                        disabled={loading || !cartItems.length}
+                        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                      >
                         {loading ? "Saving..." : "Save"}
                       </button>
-                      <button onClick={() => setStep("CART")}
-                        className="rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600">
+                      <button
+                        onClick={() => setStep("CART")}
+                        className="rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600"
+                      >
                         Cart
                       </button>
                     </div>
                   </div>
                   {canCheckout && tableOrders.length > 0 && (
-                    <button onClick={() => setStep("CUSTOMER")}
-                      className="w-full rounded-xl bg-emerald-500 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 active:scale-[0.99]">
-                      Generate Bill · ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0)}
+                    <button
+                      onClick={() => setStep("CUSTOMER")}
+                      className="w-full rounded-xl bg-emerald-500 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 active:scale-[0.99]"
+                    >
+                      Generate Bill · ₹
+                      {tableOrders.reduce(
+                        (s, o) => s + (o.totalAmount || 0),
+                        0,
+                      )}
                     </button>
                   )}
                 </div>
@@ -781,21 +1143,29 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               <div className="shrink-0 border-b border-gray-100 px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <button onClick={() => setStep("MENU")}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50">
+                    <button
+                      onClick={() => setStep("MENU")}
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50"
+                    >
                       <ArrowLeft className="h-3.5 w-3.5" />
                     </button>
                     <div>
-                      <h2 className="text-sm font-black text-gray-900">{selectedTable.name} — Orders</h2>
+                      <h2 className="text-sm font-black text-gray-900">
+                        {selectedTable.name} — Orders
+                      </h2>
                       <p className="text-[10px] text-gray-500">
-                        {tableOrders.length} KOT{tableOrders.length !== 1 ? "s" : ""} placed
-                        {cartItems.length > 0 && ` · ${cartItems.length} unsaved items`}
+                        {tableOrders.length} KOT
+                        {tableOrders.length !== 1 ? "s" : ""} placed
+                        {cartItems.length > 0 &&
+                          ` · ${cartItems.length} unsaved items`}
                       </p>
                     </div>
                   </div>
                   {canCheckout && tableOrders.length > 0 && (
-                    <button onClick={() => setStep("CUSTOMER")}
-                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600">
+                    <button
+                      onClick={() => setStep("CUSTOMER")}
+                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600"
+                    >
                       Generate Bill
                     </button>
                   )}
@@ -804,46 +1174,83 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
 
               {/* Body */}
               <div className="flex-1 min-h-0 overflow-y-auto p-2.5 space-y-3">
-
                 {/* ── Placed KOTs ── */}
                 {tableOrders.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">Placed Orders</p>
+                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                      Placed Orders
+                    </p>
                     {tableOrders.map((order: any) => {
                       const ks = order.kitchenStatus ?? "PENDING";
                       const badgeCls =
-                        ks === "DELIVERED" ? "bg-emerald-100 text-emerald-700" :
-                        ks === "READY"     ? "bg-blue-100 text-blue-700" :
-                                             "bg-amber-100 text-amber-700";
+                        ks === "DELIVERED"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : ks === "READY"
+                            ? "bg-blue-100 text-blue-700"
+                            : "bg-amber-100 text-amber-700";
                       const badgeTxt =
-                        ks === "DELIVERED" ? "Delivered" :
-                        ks === "READY"     ? "Ready" : "In Kitchen";
-                      const kotNo    = order.orderNo ?? order.id;
-                      const items    = order.batches?.flatMap((b: any) => b.items) ?? [];
-                      const placedAt = new Date(order.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-                      const doneAt   = order.completedAt
-                        ? new Date(order.completedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                        ks === "DELIVERED"
+                          ? "Delivered"
+                          : ks === "READY"
+                            ? "Ready"
+                            : "In Kitchen";
+                      const kotNo = order.orderNo ?? order.id;
+                      const items =
+                        order.batches?.flatMap((b: any) => b.items) ?? [];
+                      const placedAt = new Date(
+                        order.createdAt,
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                      const doneAt = order.completedAt
+                        ? new Date(order.completedAt).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })
                         : null;
-                      const delivAt  = ks === "DELIVERED"
-                        ? new Date(order.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-                        : null;
+                      const delivAt =
+                        ks === "DELIVERED"
+                          ? new Date(order.updatedAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })
+                          : null;
 
                       return (
-                        <div key={order.id} className="overflow-hidden rounded-xl border border-gray-200">
+                        <div
+                          key={order.id}
+                          className="overflow-hidden rounded-xl border border-gray-200"
+                        >
                           {/* KOT header */}
-                          <div className={`flex items-center justify-between px-3 py-2 ${
-                            ks === "DELIVERED" ? "bg-emerald-50" : ks === "READY" ? "bg-blue-50" : "bg-amber-50"
-                          }`}>
+                          <div
+                            className={`flex items-center justify-between px-3 py-2 ${
+                              ks === "DELIVERED"
+                                ? "bg-emerald-50"
+                                : ks === "READY"
+                                  ? "bg-blue-50"
+                                  : "bg-amber-50"
+                            }`}
+                          >
                             <div>
-                              <p className="text-xs font-black text-gray-900">KOT #{kotNo}</p>
-                              <p className="text-[10px] text-gray-500">Ordered at {placedAt}</p>
+                              <p className="text-xs font-black text-gray-900">
+                                KOT #{kotNo}
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                Ordered at {placedAt}
+                              </p>
                             </div>
                             <div className="flex items-center gap-1.5">
-                              <button onClick={() => printKOT(order)} title="Print KOT"
-                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600">
+                              <button
+                                onClick={() => printKOT(order)}
+                                title="Print KOT"
+                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                              >
                                 <Printer className="h-3 w-3" /> KOT
                               </button>
-                              <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${badgeCls}`}>
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[9px] font-black ${badgeCls}`}
+                              >
                                 {badgeTxt}
                               </span>
                             </div>
@@ -854,11 +1261,17 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                             {items.map((item: any) => {
                               const itemStatus = item.status ?? "PENDING";
                               const isCancelled = itemStatus === "CANCELLED";
-                              const isCancelReq  = itemStatus === "CANCEL_REQUESTED";
+                              const isCancelReq =
+                                itemStatus === "CANCEL_REQUESTED";
                               return (
-                                <div key={item.id} className={`flex items-center justify-between px-3 py-1.5 ${isCancelled ? "opacity-40" : ""}`}>
+                                <div
+                                  key={item.id}
+                                  className={`flex items-center justify-between px-3 py-1.5 ${isCancelled ? "opacity-40" : ""}`}
+                                >
                                   <div className="flex items-center gap-1.5 min-w-0">
-                                    <p className={`text-xs font-semibold ${isCancelled ? "text-gray-400 line-through" : "text-gray-800"}`}>
+                                    <p
+                                      className={`text-xs font-semibold ${isCancelled ? "text-gray-400 line-through" : "text-gray-800"}`}
+                                    >
                                       {item.itemName}
                                     </p>
                                     {isCancelReq && (
@@ -873,16 +1286,25 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="text-[10px] text-gray-500">× {item.quantity}</span>
-                                    <span className="text-xs font-black text-red-600">₹{item.total ?? item.price * item.quantity}</span>
+                                    <span className="text-[10px] text-gray-500">
+                                      × {item.quantity}
+                                    </span>
+                                    <span className="text-xs font-black text-red-600">
+                                      ₹
+                                      {item.total ?? item.price * item.quantity}
+                                    </span>
                                     {/* Cancel request button — only for active items */}
                                     {!isCancelled && !isCancelReq && (
                                       <button
-                                        onClick={() => handleRequestCancel(item.id)}
+                                        onClick={() =>
+                                          handleRequestCancel(item.id)
+                                        }
                                         title="Request cancellation"
                                         className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition hover:bg-red-100 hover:text-red-500"
                                       >
-                                        <span className="text-[11px] font-black leading-none">×</span>
+                                        <span className="text-[11px] font-black leading-none">
+                                          ×
+                                        </span>
                                       </button>
                                     )}
                                   </div>
@@ -895,10 +1317,20 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-3 py-1.5">
                             <div className="flex items-center gap-2.5 text-[9px] text-gray-400">
                               <span>📋 {placedAt}</span>
-                              {doneAt  && <span className="text-blue-500">🍳 {doneAt}</span>}
-                              {delivAt && <span className="text-emerald-500">✓ {delivAt}</span>}
+                              {doneAt && (
+                                <span className="text-blue-500">
+                                  🍳 {doneAt}
+                                </span>
+                              )}
+                              {delivAt && (
+                                <span className="text-emerald-500">
+                                  ✓ {delivAt}
+                                </span>
+                              )}
                             </div>
-                            <p className="text-xs font-black text-red-600">₹{order.totalAmount}</p>
+                            <p className="text-xs font-black text-red-600">
+                              ₹{order.totalAmount}
+                            </p>
                           </div>
                         </div>
                       );
@@ -914,20 +1346,32 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     </p>
                     <div className="overflow-hidden rounded-xl border-2 border-dashed border-amber-300">
                       {cartItems.map((item: any) => (
-                        <div key={item.id}
-                          className="flex items-center gap-2.5 border-b border-amber-100 px-3 py-2 last:border-0">
+                        <div
+                          key={item.id}
+                          className="flex items-center gap-2.5 border-b border-amber-100 px-3 py-2 last:border-0"
+                        >
                           <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-gray-900">{item.name}</p>
-                            <p className="text-[10px] text-gray-500">₹{item.price} each</p>
+                            <p className="truncate text-xs font-bold text-gray-900">
+                              {item.name}
+                            </p>
+                            <p className="text-[10px] text-gray-500">
+                              ₹{item.price} each
+                            </p>
                           </div>
                           <div className="flex items-center gap-1 rounded-lg bg-red-500 px-1 py-1 text-white">
-                            <button onClick={() => decreaseQty(item.id)}
-                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90">
+                            <button
+                              onClick={() => decreaseQty(item.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90"
+                            >
                               <Minus className="h-2.5 w-2.5" strokeWidth={3} />
                             </button>
-                            <span className="min-w-[18px] text-center text-xs font-black">{cart[item.id]}</span>
-                            <button onClick={() => increaseQty(item.id)}
-                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90">
+                            <span className="min-w-[18px] text-center text-xs font-black">
+                              {cart[item.id]}
+                            </span>
+                            <button
+                              onClick={() => increaseQty(item.id)}
+                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90"
+                            >
                               <Plus className="h-2.5 w-2.5" strokeWidth={3} />
                             </button>
                           </div>
@@ -937,13 +1381,22 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         </div>
                       ))}
                       <div className="flex items-center justify-between bg-amber-50 px-3 py-2">
-                        <p className="text-xs text-amber-700 font-bold">New order total</p>
-                        <p className="text-sm font-black text-red-600">₹{grandTotal}</p>
+                        <p className="text-xs text-amber-700 font-bold">
+                          New order total
+                        </p>
+                        <p className="text-sm font-black text-red-600">
+                          ₹{grandTotal}
+                        </p>
                       </div>
                     </div>
-                    <button onClick={async () => { await handleSaveOrder(); setStep("MENU"); }}
+                    <button
+                      onClick={async () => {
+                        await handleSaveOrder();
+                        setStep("MENU");
+                      }}
                       disabled={loading}
-                      className="w-full rounded-xl bg-red-500 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50">
+                      className="w-full rounded-xl bg-red-500 py-2.5 text-xs font-black text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50"
+                    >
                       {loading ? "Saving..." : "Save to Kitchen"}
                     </button>
                   </div>
@@ -953,8 +1406,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {tableOrders.length === 0 && cartItems.length === 0 && (
                   <div className="flex h-full flex-col items-center justify-center py-12 text-center">
                     <span className="text-3xl">🛒</span>
-                    <p className="mt-2 text-sm font-bold text-gray-500">No orders yet</p>
-                    <p className="text-xs text-gray-400">Add items from the menu</p>
+                    <p className="mt-2 text-sm font-bold text-gray-500">
+                      No orders yet
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      Add items from the menu
+                    </p>
                   </div>
                 )}
               </div>
@@ -966,12 +1423,18 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <div>
                       <p className="text-[10px] text-gray-500">Table Total</p>
                       <p className="text-xl font-black text-red-600">
-                        ₹{tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0) + grandTotal}
+                        ₹
+                        {tableOrders.reduce(
+                          (s, o) => s + (o.totalAmount || 0),
+                          0,
+                        ) + grandTotal}
                       </p>
                     </div>
                     {canCheckout && tableOrders.length > 0 && (
-                      <button onClick={() => setStep("CUSTOMER")}
-                        className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-600">
+                      <button
+                        onClick={() => setStep("CUSTOMER")}
+                        className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-600"
+                      >
                         Generate Bill
                       </button>
                     )}
@@ -981,12 +1444,22 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
             </div>
           )}
           {step === "CUSTOMER" && (
-            <CustomerSection customerName={customerName} setCustomerName={setCustomerName}
-              customerAddress={customerAddress} setCustomerAddress={setCustomerAddress}
-              customerPhone={customerPhone} setCustomerPhone={setCustomerPhone}
-              grand_Total={tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0)}
-              billingType="DINE_IN" setStep={setStep}
-              onConfirm={handleGenerateBill} billing={branchData.billing} />
+            <CustomerSection
+              customerName={customerName}
+              setCustomerName={setCustomerName}
+              customerAddress={customerAddress}
+              setCustomerAddress={setCustomerAddress}
+              customerPhone={customerPhone}
+              setCustomerPhone={setCustomerPhone}
+              grand_Total={tableOrders.reduce(
+                (s, o) => s + (o.totalAmount || 0),
+                0,
+              )}
+              billingType="DINE_IN"
+              setStep={setStep}
+              onConfirm={handleGenerateBill}
+              billing={branchData.billing}
+            />
           )}
         </div>
       )}
