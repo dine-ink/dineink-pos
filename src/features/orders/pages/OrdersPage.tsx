@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { MagnifyingGlassIcon, PrinterIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import PageLoader from "@/components/ui/PageLoader";
+import { api } from "@/services/api";
 
 const TYPE_BADGE: Record<string, string> = {
   DINE_IN: "bg-blue-100 text-blue-700",
@@ -26,13 +27,11 @@ export default function OrderHistory() {
   const { user } = useAppSelector((state) => state.auth);
 
   const fetchOrders = async () => {
+    if (!user?.restaurantId || !user?.branchId) return;
     try {
       setLoading(true);
-      const res = await fetch(
-        `https://dineink-backend.onrender.com/api/bills/${user.restaurantId}/${user.branchId}/branchwise`,
-      );
-      const json = await res.json();
-      if (json.success) setOrders(json.bills || []);
+      const res = await api.get(`/bills/${user.restaurantId}/${user.branchId}/branchwise`);
+      if (res.data.success) setOrders(res.data.bills || []);
     } catch {
       // silently fail, orders stays as empty array
     } finally {
@@ -42,7 +41,7 @@ export default function OrderHistory() {
 
   useEffect(() => {
     if (user?.restaurantId) fetchOrders();
-  }, []);
+  }, [user?.restaurantId, user?.branchId]);
 
   const filteredOrders = useMemo(() => {
     if (!search.trim()) return orders;
@@ -58,20 +57,14 @@ export default function OrderHistory() {
 
   const handleCompleteOrder = async (order: any) => {
     try {
-      const res = await fetch(
-        `https://dineink-backend.onrender.com/api/running-orders/closeRunningOrder`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            runningOrderId: order.id, customerName: order.customer,
-            customerPhone: order.customerPhone,
-            paymentMethod: order.paymentMethod || "CASH", orderType: order.orderType,
-          }),
-        },
-      );
-      const json = await res.json();
-      if (json.success) fetchOrders();
+      const res = await api.post(`/running-orders/closeRunningOrder`, {
+        runningOrderId: order.id,
+        customerName: order.customer,
+        customerPhone: order.customerPhone,
+        paymentMethod: order.paymentMethod || "CASH",
+        orderType: order.orderType,
+      });
+      if (res.data.success) fetchOrders();
     } catch { /* silent */ }
   };
 
@@ -134,7 +127,7 @@ export default function OrderHistory() {
                 <div>
                   <p className="text-xs font-black text-gray-900">{order.orderNo}</p>
                   <p className="text-[10px] text-gray-500">
-                    {new Date(order.createdAt).toLocaleTimeString()} · {order.table || "—"}
+                    {order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : "—"} · {order.table || "—"}
                   </p>
                 </div>
                 <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${getTypeBadge(order.orderType)}`}>
@@ -193,7 +186,7 @@ export default function OrderHistory() {
                   <tr key={`${order.source}-${order.id}`}
                     className={`border-b border-gray-100 transition hover:bg-red-50/50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
                     <td className="px-3 py-2 text-xs font-bold text-gray-800">{order.orderNo}</td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{new Date(order.createdAt).toLocaleTimeString()}</td>
+                    <td className="px-3 py-2 text-xs text-gray-600">{order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : "—"}</td>
                     <td className="px-3 py-2 text-xs font-semibold text-gray-900">{customerDisplay(order)}</td>
                     <td className="px-3 py-2">
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getTypeBadge(order.orderType)}`}>{order.orderType}</span>
@@ -255,10 +248,10 @@ export default function OrderHistory() {
             <div id="thermal-bill" className="mx-auto bg-white px-2 pb-3 text-black"
               style={{ width: "100%", maxWidth: "72mm", fontFamily: "monospace", fontSize: "12px", lineHeight: "1.4" }}>
               <div className="text-center">
-                <h1 style={{ fontSize: "18px", fontWeight: "900" }}>DINEINK RESTAURANT</h1>
-                <p style={{ fontSize: "10px", marginTop: "3px" }}>Chennai, Tamil Nadu</p>
-                <p style={{ fontSize: "10px" }}>Phone: +91 9876543210</p>
-                <p style={{ fontSize: "10px" }}>GSTIN: 33ABCDE1234F1Z5</p>
+                <h1 style={{ fontSize: "18px", fontWeight: "900" }}>{user?.restaurant?.name || user?.branch?.name || "Restaurant"}</h1>
+                {(user?.restaurant?.address || user?.branch?.address) && <p style={{ fontSize: "10px", marginTop: "3px" }}>{user?.restaurant?.address || user?.branch?.address}</p>}
+                {(user?.restaurant?.phone || user?.branch?.phone) && <p style={{ fontSize: "10px" }}>Phone: {user?.restaurant?.phone || user?.branch?.phone}</p>}
+                {(user?.restaurant?.gstNumber || user?.branch?.gstNumber) && <p style={{ fontSize: "10px" }}>GSTIN: {user?.restaurant?.gstNumber || user?.branch?.gstNumber}</p>}
               </div>
               <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
               <div style={{ fontSize: "11px" }}>
@@ -287,7 +280,7 @@ export default function OrderHistory() {
                 ))}
               </div>
               <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
-              {[["Subtotal", `₹${Number(selectedBill.total || 0).toFixed(2)}`], ["CGST", "₹0.00"], ["SGST", "₹0.00"]].map(([l, v]) => (
+              {[["Subtotal", `₹${Number(selectedBill.subtotal || selectedBill.total || 0).toFixed(2)}`], ["CGST", `₹${Number(selectedBill.cgst || 0).toFixed(2)}`], ["SGST", `₹${Number(selectedBill.sgst || 0).toFixed(2)}`]].map(([l, v]) => (
                 <div key={l} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "12px" }}>
                   <span>{l}</span><span>{v}</span>
                 </div>

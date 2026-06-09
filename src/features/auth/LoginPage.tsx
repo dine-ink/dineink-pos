@@ -24,8 +24,10 @@ export default function LoginPage() {
     try {
       const data = await loginApi(identifier, password);
       dispatch(setAuth({
-        token: data.token, user: data.user,
-        restaurant: data.user.restaurantId, branch: data.user.branchId,
+        token: data.token,
+        user: data.user,
+        restaurant: data.user.restaurant ?? null,
+        branch: data.user.branch ?? null,
       }));
       navigate("/app/billing");
     } catch {

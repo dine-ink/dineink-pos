@@ -23,7 +23,6 @@ export default function CartSection({
   onHold,
 }: Props) {
   const { user } = useAppSelector((state) => state.auth);
-  console.log("User Department in CartSection:", user);
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* HEADER */}

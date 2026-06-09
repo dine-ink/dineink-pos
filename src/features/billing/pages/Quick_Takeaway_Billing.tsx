@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { saveRunningOrder } from "@/services/runningOrderService";
 import { PauseCircle, Play } from "lucide-react";
+import { printReceipt } from "@/utils/printer";
 
 type HeldOrder = {
   id: string;
@@ -43,6 +44,7 @@ export default function NormalBilling({
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
 
   const holdCurrentOrder = () => {
@@ -123,89 +125,63 @@ export default function NormalBilling({
     [cartItems, cart],
   );
 
-  const printBill = (billingData: any, items: any[]) => {
-    const printWindow = window.open("", "", "width=400,height=800");
-    if (!printWindow) return;
-    printWindow.document.write(`
-<html><head><title>Print Bill</title>
-<style>
-@page{size:80mm auto;margin:0}body{margin:0;padding:0;font-family:monospace;background:white}
-.bill-container{width:72mm;max-width:72mm;margin:0 auto;padding:4px;box-sizing:border-box;color:black}
-.center{text-align:center}.divider{border-top:1px dashed black;margin:8px 0}
-table{width:100%;border-collapse:collapse;table-layout:fixed}
-td{font-size:11px;padding:3px 0;vertical-align:top;word-break:break-word}
-.item-name{width:56%;padding-right:4px}.qty{width:14%;text-align:center}.amount{width:30%;text-align:right}
-.bill-info td:first-child{width:35%}.bill-info td:last-child{text-align:right}
-.totals td:first-child{width:65%}.totals td:last-child{text-align:right}
-.grand-total{font-size:18px;font-weight:bold}.footer{text-align:center;margin-top:12px}.footer p{margin:2px 0}
-@media print{@page{size:80mm auto;margin:0}body{width:72mm}.bill-container{width:72mm;max-width:72mm}}
-</style></head>
-<body onload="window.print();window.close();">
-<div class="bill-container">
-<div class="center"><h2 style="margin:0;font-size:24px;">KD Kari</h2><p style="font-size:11px;margin-top:6px;">Kondapur, Hyderabad</p><p style="font-size:11px;">GSTIN: 33ABCDE1234F1Z5</p></div>
-<div class="divider"></div>
-<table class="bill-info">
-<tr><td>Bill No</td><td>BILL-${Date.now()}</td></tr>
-<tr><td>Date</td><td>${new Date().toLocaleDateString()}</td></tr>
-<tr><td>Time</td><td>${new Date().toLocaleTimeString()}</td></tr>
-<tr><td>Customer</td><td>${customerName || "Walk-in"}</td></tr>
-<tr><td>Order Type</td><td>${billingType}</td></tr>
-<tr><td>Payment</td><td>${billingData.paymentMethod}</td></tr>
-</table>
-<div class="divider"></div>
-<table><thead><tr><td class="item-name"><b>Item</b></td><td class="qty"><b>Qty</b></td><td class="amount"><b>Amt</b></td></tr></thead></table>
-<div class="divider"></div>
-<table><tbody>${items.map((item: any) => `<tr><td class="item-name">${item.itemName}</td><td class="qty">${item.quantity}</td><td class="amount">₹${(item.price * item.quantity).toFixed(2)}</td></tr>`).join("")}</tbody></table>
-<div class="divider"></div>
-<table class="totals">
-<tr><td>Subtotal</td><td>₹${billingData.subtotal.toFixed(2)}</td></tr>
-<tr><td>Discount</td><td>₹${billingData.discountAmount.toFixed(2)}</td></tr>
-<tr><td>CGST</td><td>₹${billingData.cgst.toFixed(2)}</td></tr>
-<tr><td>SGST</td><td>₹${billingData.sgst.toFixed(2)}</td></tr>
-<tr><td>Service Charge</td><td>₹${billingData.serviceChargeAmount.toFixed(2)}</td></tr>
-${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingData.packingCharge.toFixed(2)}</td></tr>` : ""}
-<tr class="grand-total"><td>TOTAL</td><td>₹${billingData.grandTotal.toFixed(2)}</td></tr>
-</table>
-<div class="divider"></div>
-<div class="footer"><p style="font-size:14px;font-weight:bold;">Thank You Visit Again!</p><p style="font-size:11px;">Powered by DineInk POS</p></div>
-</div></body></html>`);
-    printWindow.document.close();
-  };
-
   const handleConfirmOrder = async (billingData: any) => {
-    if (!cartItems.length) return;
-    const items = cartItems.map((item) => ({
-      menuItemId: item.id,
-      itemName: item.name,
-      quantity: cart[item.id],
-      price: item.price,
-    }));
-    const response = await saveRunningOrder({
-      restaurantId: user.restaurantId,
-      branchId: user.branchId,
-      createdById: user.id,
-      orderType: billingType,
-      customerName,
-      customerPhone,
-      customerAddress,
-      paymentMethod: billingData.paymentMethod,
-      subtotal: grandTotal,
-      discountAmount: billingData.discountAmount,
-      packingCharge: billingData.packingCharge,
-      serviceCharge: billingData.serviceChargeAmount,
-      gstAmount: billingData.gstAmount,
-      cgst: billingData.cgst,
-      sgst: billingData.sgst,
-      finalAmount: billingData.grandTotal,
-      items,
-    });
-    if (response.success) {
-      printBill({ ...billingData, subtotal: grandTotal }, items);
-      setCart({});
-      setCustomerName("");
-      setCustomerPhone("");
-      setCustomerAddress("");
-      setStep("MENU");
+    if (!cartItems.length || submitting) return;
+    setSubmitting(true);
+    try {
+      const items = cartItems.map((item) => ({
+        menuItemId: item.id,
+        itemName: item.name,
+        quantity: cart[item.id],
+        price: item.price,
+      }));
+      const response = await saveRunningOrder({
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+        createdById: user.id,
+        orderType: billingType,
+        customerName,
+        customerPhone,
+        customerAddress,
+        paymentMethod: billingData.paymentMethod,
+        subtotal: grandTotal,
+        discountAmount: billingData.discountAmount,
+        packingCharge: billingData.packingCharge,
+        serviceCharge: billingData.serviceChargeAmount,
+        gstAmount: billingData.gstAmount,
+        cgst: billingData.cgst,
+        sgst: billingData.sgst,
+        finalAmount: billingData.grandTotal,
+        items,
+      });
+      if (response.success) {
+        const billNo = response.data?.billNumber || response.data?.id || `BILL-${Date.now()}`;
+        // Silent print — fires and forgets; UI resets regardless of print outcome
+        printReceipt({
+          shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
+          shopAddress: branchData?.address || user?.branch?.address,
+          shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
+          billNo,
+          customerName,
+          billingType,
+          paymentMethod: billingData.paymentMethod,
+          items,
+          subtotal: grandTotal,
+          discountAmount: billingData.discountAmount,
+          cgst: billingData.cgst,
+          sgst: billingData.sgst,
+          serviceChargeAmount: billingData.serviceChargeAmount,
+          packingCharge: billingData.packingCharge,
+          grandTotal: billingData.grandTotal,
+        });
+        setCart({});
+        setCustomerName("");
+        setCustomerPhone("");
+        setCustomerAddress("");
+        setStep("MENU");
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -396,6 +372,7 @@ ${billingData.packingCharge > 0 ? `<tr><td>Packing Charge</td><td>₹${billingDa
           setStep={setStep}
           onConfirm={handleConfirmOrder}
           billing={branchData.billing}
+          loading={submitting}
         />
       )}
     </div>

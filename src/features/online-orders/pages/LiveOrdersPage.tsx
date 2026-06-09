@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { MagnifyingGlassIcon, CheckCircleIcon } from "@heroicons/react/24/solid";
 
-const SAMPLE_ORDERS = [
+type OnlineOrder = { id: string; customer: string; platform: string; status: string; items: number; amount: number; time: string };
+
+const INITIAL_ORDERS: OnlineOrder[] = [
   { id: "SWG-1001", customer: "Rahul", platform: "SWIGGY", status: "NEW", items: 5, amount: 560, time: "5 mins ago" },
   { id: "ZMT-1002", customer: "Karthik", platform: "ZOMATO", status: "PREPARING", items: 2, amount: 420, time: "12 mins ago" },
   { id: "SWG-1003", customer: "Arun", platform: "SWIGGY", status: "READY", items: 4, amount: 860, time: "18 mins ago" },
@@ -11,11 +13,14 @@ const SAMPLE_ORDERS = [
 const STATUS_FILTERS = ["ALL", "NEW", "PREPARING", "READY"];
 
 export default function OnlineOrders() {
+  const [orders, setOrders] = useState<OnlineOrder[]>(INITIAL_ORDERS);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("ALL");
 
+  const markDone = (id: string) => setOrders((prev) => prev.filter((o) => o.id !== id));
+
   const filteredOrders = useMemo(() => {
-    return SAMPLE_ORDERS.filter((order) => {
+    return orders.filter((order) => {
       const matchesSearch =
         order.id.toLowerCase().includes(search.toLowerCase()) ||
         order.customer.toLowerCase().includes(search.toLowerCase());
@@ -106,7 +111,7 @@ export default function OnlineOrders() {
                 <p className="text-lg font-black text-red-600">₹{order.amount}</p>
               </div>
               <div className="mt-2 border-t border-gray-100 pt-2 flex justify-end">
-                <button className="flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-emerald-600">
+                <button onClick={() => markDone(order.id)} className="flex items-center gap-1 rounded-lg bg-emerald-500 px-3 py-1.5 text-[10px] font-black text-white transition hover:bg-emerald-600">
                   <CheckCircleIcon className="h-3.5 w-3.5" /> Mark Done
                 </button>
               </div>
@@ -143,7 +148,7 @@ export default function OnlineOrders() {
                       <p className="text-sm font-black text-red-600">₹{order.amount}</p>
                     </td>
                     <td className="px-3 py-2">
-                      <button className="flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
+                      <button onClick={() => markDone(order.id)} className="flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
                         <CheckCircleIcon className="h-3 w-3" /> Done
                       </button>
                     </td>

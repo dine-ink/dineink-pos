@@ -9,13 +9,14 @@ type Props = {
   customerAddress: string; setCustomerAddress: any;
   grand_Total: number; billingType: string;
   setStep: any; billing: any; onConfirm: any;
+  loading?: boolean;
 };
 
 export default function CustomerSection({
   customerName, setCustomerName,
   customerPhone, setCustomerPhone,
   customerAddress, setCustomerAddress,
-  grand_Total, billing, setStep, onConfirm,
+  grand_Total, billing, setStep, onConfirm, loading = false,
 }: Props) {
   const [subtotal] = useState<number>(grand_Total);
   const [discount, setDiscount] = useState<number>(0);
@@ -256,10 +257,11 @@ export default function CustomerSection({
               {/* CONFIRM — desktop */}
               <button
                 onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge })}
-                className="hidden xl:flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99]"
+                disabled={loading}
+                className="hidden xl:flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <CheckCircle className="h-4 w-4" />
-                Confirm Order
+                {loading ? "Placing Order..." : "Confirm Order"}
               </button>
             </div>
           </div>
@@ -270,10 +272,11 @@ export default function CustomerSection({
       <div className="xl:hidden shrink-0 border-t border-gray-100 bg-white p-2.5">
         <button
           onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge })}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200"
+          disabled={loading}
+          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <CheckCircle className="h-4 w-4" />
-          Confirm Order · ₹{grandTotal.toFixed(0)}
+          {loading ? "Placing Order..." : `Confirm Order · ₹${grandTotal.toFixed(0)}`}
         </button>
       </div>
     </div>

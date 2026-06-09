@@ -6,7 +6,6 @@ import { useAppSelector } from "@/store/hooks";
 import {
   getInventoryAdjustments,
   getInventoryIngredients,
-  getInventoryUsers,
   createInventoryAdjustment,
   updateInventoryAdjustment,
   deleteInventoryAdjustment,
@@ -27,7 +26,7 @@ export default function Inventory() {
   const [ingredients, setIngredients] = useState<any[]>([]);
   // const [users, setUsers] = useState<any[]>([]);
   // const [loading, setLoading] = useState(false);
-  const { restaurant, branch, user } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
 
   const [search, setSearch] = useState("");
 
@@ -62,9 +61,9 @@ export default function Inventory() {
 
       if (item.isNew) {
         await createInventoryAdjustment({
-          restaurantId: restaurant,
+          restaurantId: user?.restaurantId,
 
-          branchId: branch,
+          branchId: user?.branchId,
 
           ingredientId: Number(item.ingredientId),
 
@@ -158,12 +157,9 @@ export default function Inventory() {
     try {
       // setLoading(true);
 
-      const [inventoryRes, ingredientRes, usersRes] = await Promise.all([
-        getInventoryAdjustments(branch),
-
-        getInventoryIngredients(restaurant),
-
-        getInventoryUsers(branch),
+      const [inventoryRes, ingredientRes] = await Promise.all([
+        getInventoryAdjustments(user?.branchId),
+        getInventoryIngredients(user?.restaurantId),
       ]);
 
       setInventory(inventoryRes.data || []);

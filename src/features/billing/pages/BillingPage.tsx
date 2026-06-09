@@ -6,11 +6,16 @@ import NormalBilling from "./Quick_Takeaway_Billing";
 import { getBranchDetails } from "@/services/branchService";
 import { getAllRunningOrders } from "@/services/runningOrderService";
 import PageLoader from "@/components/ui/PageLoader";
+import PrinterSetupModal from "@/components/PrinterSetupModal";
+import { getSavedPrinter } from "@/utils/printer";
+import { Printer } from "lucide-react";
 
 export default function BillingPage() {
-  const { branch, user } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
   const [step, setStep] = useState<"MENU" | "CART" | "CUSTOMER">("MENU");
   const [billingType, setBillingType] = useState("");
+  const [printerModalOpen, setPrinterModalOpen] = useState(false);
+  const [hasPrinter, setHasPrinter] = useState(() => !!getSavedPrinter());
   const [selectedTable, setSelectedTable] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState<any[]>([]);
@@ -24,15 +29,21 @@ export default function BillingPage() {
     try {
       setLoading(true);
       const [data, ordersData] = await Promise.all([
-        getBranchDetails(branch),
+        getBranchDetails(user?.branchId),
         user?.restaurantId && user?.branchId
           ? getAllRunningOrders(user.restaurantId, user.branchId)
           : Promise.resolve({ data: [] }),
       ]);
       setBranchData(data.data);
-      setProducts(data.data.restaurant.menuItems || []);
+      const menuItems: any[] = data.data.restaurant.menuItems || [];
+      setProducts(menuItems);
       setTables(data.data.tables || []);
-      setTopSellingItems(data.data.topSellingItems || []);
+      // topSellingItems from API only has {name, soldQuantity} — join with menuItems to get full item data
+      const rawTopSelling: { name: string }[] = data.data.topSellingItems || [];
+      const topSelling = rawTopSelling
+        .map((ts) => menuItems.find((mi) => mi.name === ts.name))
+        .filter(Boolean);
+      setTopSellingItems(topSelling);
       setRunningOrders(ordersData.data || []);
       const originalCategories = data.data.restaurant.categories || [];
       setCategories([
@@ -44,11 +55,11 @@ export default function BillingPage() {
     } finally {
       setLoading(false);
     }
-  }, [branch, user?.restaurantId, user?.branchId]);
+  }, [user?.branchId, user?.restaurantId]);
 
   useEffect(() => {
-    if (branch) fetchData();
-  }, [branch, fetchData]);
+    if (user?.branchId) fetchData();
+  }, [user?.branchId, fetchData]);
 
   // Keep running-orders fresh so table colours update without full reload
   useEffect(() => {
@@ -72,14 +83,36 @@ export default function BillingPage() {
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-gray-50">
-      <div className="shrink-0 border-b border-gray-200 bg-white shadow-sm">
-        <BillingTypeTabs
-          billingType={billingType}
-          setBillingType={setBillingType}
-          setSelectedTable={setSelectedTable}
-          branchData={branchData}
-        />
+      <div className="shrink-0 flex items-center border-b border-gray-200 bg-white shadow-sm pr-2">
+        <div className="flex-1 min-w-0">
+          <BillingTypeTabs
+            billingType={billingType}
+            setBillingType={setBillingType}
+            setSelectedTable={setSelectedTable}
+            branchData={branchData}
+          />
+        </div>
+        <button
+          onClick={() => setPrinterModalOpen(true)}
+          title="Printer setup"
+          className={`ml-1 shrink-0 flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition ${
+            hasPrinter
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-gray-200 bg-white text-gray-500 hover:border-red-200 hover:text-red-600"
+          }`}
+        >
+          <Printer className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">{hasPrinter ? "Printer" : "No Printer"}</span>
+        </button>
       </div>
+
+      <PrinterSetupModal
+        isOpen={printerModalOpen}
+        onClose={() => {
+          setHasPrinter(!!getSavedPrinter());
+          setPrinterModalOpen(false);
+        }}
+      />
       <div className="flex-1 min-h-0 overflow-hidden p-1.5 sm:p-2 xl:p-2.5">
         {loading && !branchData ? (
           <PageLoader />

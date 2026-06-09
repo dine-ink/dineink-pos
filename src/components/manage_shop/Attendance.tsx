@@ -16,9 +16,10 @@ const todayDate = new Date().toLocaleDateString("en-GB", {
 });
 
 export default function Attendance() {
-  const [employees, setEmployees] = useState<any[]>();
+  const [employees, setEmployees] = useState<any[]>([]);
   const [search, setSearch] = useState("");
-  const { branch } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
+  const branchId = user?.branchId;
 
   const filteredEmployees = useMemo(() => {
     return employees?.filter((employee: any) =>
@@ -29,7 +30,7 @@ export default function Attendance() {
   const fetchData = async () => {
     try {
       // setLoading(true);
-      const data = await getTodayAttendance(branch);
+      const data = await getTodayAttendance(branchId);
 
       setEmployees(data.data || []);
     } catch (error) {
@@ -40,8 +41,8 @@ export default function Attendance() {
   };
 
   useEffect(() => {
-    if (branch) fetchData();
-  }, [branch]);
+    if (branchId) fetchData();
+  }, [branchId]);
   return (
     <div className="w-full h-full  p-2">
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">

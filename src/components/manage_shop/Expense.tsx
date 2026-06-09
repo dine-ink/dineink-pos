@@ -60,7 +60,7 @@ export default function Expense() {
 
   const [editRowId, setEditRowId] = useState<number | null>(null);
 
-  const { restaurant, branch, user } = useAppSelector((state) => state.auth);
+  const { user } = useAppSelector((state) => state.auth);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter(
@@ -76,12 +76,9 @@ export default function Expense() {
     try {
       setLoading(true);
       const [expenseRes, usersRes] = await Promise.all([
-        getExpenses(branch),
-        getExpenseUsers(branch),
+        getExpenses(user?.branchId),
+        getExpenseUsers(user?.branchId),
       ]);
-
-      console.log("Expense API", expenseRes);
-      console.log("Users API", usersRes);
       setExpenses(expenseRes.data || []);
       setUsers(usersRes.data || []);
     } catch (error) {
@@ -112,9 +109,9 @@ export default function Expense() {
     const newExpense: ExpenseType = {
       id: Date.now(),
 
-      restaurantId: restaurant,
+      restaurantId: user?.restaurantId,
 
-      branchId: branch,
+      branchId: user?.branchId,
 
       title: "",
 
@@ -142,9 +139,9 @@ export default function Expense() {
     try {
       if (expense.isNew) {
         await createExpense({
-          restaurantId: restaurant,
+          restaurantId: user?.restaurantId,
 
-          branchId: branch,
+          branchId: user?.branchId,
 
           title: expense.title,
 
