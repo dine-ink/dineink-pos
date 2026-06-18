@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { MagnifyingGlassIcon, PrinterIcon, XMarkIcon } from "@heroicons/react/24/solid";
+import { MagnifyingGlassIcon, PrinterIcon } from "@heroicons/react/24/solid";
 import PageLoader from "@/components/ui/PageLoader";
 import { api } from "@/services/api";
+import { getSavedPrinter, printReceipt, type BillData } from "@/utils/printer";
 
 const TYPE_BADGE: Record<string, string> = {
   DINE_IN: "bg-blue-100 text-blue-700",
@@ -22,9 +23,12 @@ export default function OrderHistory() {
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedBill, setSelectedBill] = useState<any>(null);
-  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [hasPrinter, setHasPrinter] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
+
+  useEffect(() => {
+    setHasPrinter(!!getSavedPrinter());
+  }, []);
 
   const fetchOrders = async () => {
     if (!user?.restaurantId || !user?.branchId) return;
@@ -68,27 +72,29 @@ export default function OrderHistory() {
     } catch { /* silent */ }
   };
 
-  const handlePrint = () => {
-    const printContents = document.getElementById("thermal-bill")?.innerHTML;
-    const printWindow = window.open("", "", "width=400,height=800");
-    if (printWindow && printContents) {
-      printWindow.document.write(`
-        <html><head><title>Print Bill</title>
-        <style>
-          body{margin:0;padding:0;font-family:monospace;background:white}
-          .bill-container{width:72mm;max-width:72mm;margin:0 auto;padding:4px;box-sizing:border-box;color:black}
-          .text-center{text-align:center}.flex{display:flex;justify-content:space-between}
-          .items-row{display:flex;margin-bottom:6px}.item-name{flex:1;padding-right:8px}
-          .qty{width:40px;text-align:center}.amt{width:70px;text-align:right}
-          .divider{border-top:1px dashed black;margin:8px 0}
-          @media print{@page{size:80mm auto;margin:0}body{margin:0;padding:0;width:72mm}.bill-container{width:72mm;max-width:72mm;padding:4px;margin:0 auto}}
-        </style></head>
-        <body onload="window.print();window.close();">
-          <div class="bill-container">${printContents}</div>
-        </body></html>
-      `);
-      printWindow.document.close();
-    }
+  const handleDirectPrint = async (order: any) => {
+    const bill: BillData = {
+      shopName: user?.restaurant?.name || user?.branch?.name || "Restaurant",
+      shopAddress: user?.restaurant?.address || user?.branch?.address,
+      shopGstin: user?.restaurant?.gstNumber || user?.branch?.gstNumber,
+      billNo: order.orderNo || String(order.id),
+      customerName: customerDisplay(order),
+      billingType: order.orderType || "DINE_IN",
+      paymentMethod: order.paymentMethod || "CASH",
+      items: (order.items || []).map((item: any) => ({
+        itemName: item.itemName || item.name || "",
+        quantity: Number(item.quantity) || 1,
+        price: Number(item.price) || (Number(item.total) / (Number(item.quantity) || 1)) || 0,
+      })),
+      subtotal: Number(order.subtotal || order.total || 0),
+      discountAmount: Number(order.discountAmount || 0),
+      cgst: Number(order.cgst || 0),
+      sgst: Number(order.sgst || 0),
+      serviceChargeAmount: Number(order.serviceCharge || 0),
+      packingCharge: Number(order.packingCharge || 0),
+      grandTotal: Number(order.total || 0),
+    };
+    await printReceipt(bill);
   };
 
   if (loading) return <PageLoader />;
@@ -151,8 +157,11 @@ export default function OrderHistory() {
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <button onClick={() => { setSelectedBill(order); setShowPrintPreview(true); }}
-                    className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-50 text-red-600 transition hover:bg-red-100">
+                  <button
+                    onClick={() => handleDirectPrint(order)}
+                    disabled={!hasPrinter}
+                    title={hasPrinter ? "Print Bill" : "No printer configured"}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${hasPrinter ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                     <PrinterIcon className="h-3.5 w-3.5" />
                   </button>
                   {order.orderStatus !== "COMPLETED" && (
@@ -207,8 +216,11 @@ export default function OrderHistory() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5">
-                        <button onClick={() => { setSelectedBill(order); setShowPrintPreview(true); }}
-                          className="flex h-6 w-6 items-center justify-center rounded-md bg-red-50 text-red-600 transition hover:bg-red-100">
+                        <button
+                          onClick={() => handleDirectPrint(order)}
+                          disabled={!hasPrinter}
+                          title={hasPrinter ? "Print Bill" : "No printer configured"}
+                          className={`flex h-6 w-6 items-center justify-center rounded-md transition ${hasPrinter ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                           <PrinterIcon className="h-3 w-3" />
                         </button>
                         {order.orderStatus !== "COMPLETED" && (
@@ -233,81 +245,6 @@ export default function OrderHistory() {
         </div>
       </div>
 
-      {/* PRINT PREVIEW */}
-      {showPrintPreview && selectedBill && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-          <div className="relative max-h-[95vh] w-full max-w-xs overflow-auto rounded-2xl bg-white shadow-2xl">
-            <button onClick={() => setShowPrintPreview(false)}
-              className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-gray-100 transition hover:bg-gray-200">
-              <XMarkIcon className="h-4 w-4 text-gray-700" />
-            </button>
-            <div className="px-4 pt-4 pb-2">
-              <p className="text-sm font-black text-gray-900">Print Preview</p>
-              <p className="text-[10px] text-gray-500">{selectedBill.orderNo}</p>
-            </div>
-            <div id="thermal-bill" className="mx-auto bg-white px-2 pb-3 text-black"
-              style={{ width: "100%", maxWidth: "72mm", fontFamily: "monospace", fontSize: "12px", lineHeight: "1.4" }}>
-              <div className="text-center">
-                <h1 style={{ fontSize: "18px", fontWeight: "900" }}>{user?.restaurant?.name || user?.branch?.name || "Restaurant"}</h1>
-                {(user?.restaurant?.address || user?.branch?.address) && <p style={{ fontSize: "10px", marginTop: "3px" }}>{user?.restaurant?.address || user?.branch?.address}</p>}
-                {(user?.restaurant?.phone || user?.branch?.phone) && <p style={{ fontSize: "10px" }}>Phone: {user?.restaurant?.phone || user?.branch?.phone}</p>}
-                {(user?.restaurant?.gstNumber || user?.branch?.gstNumber) && <p style={{ fontSize: "10px" }}>GSTIN: {user?.restaurant?.gstNumber || user?.branch?.gstNumber}</p>}
-              </div>
-              <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
-              <div style={{ fontSize: "11px" }}>
-                {[["Bill No", selectedBill.orderNo], ["Date", new Date(selectedBill.createdAt).toLocaleDateString()],
-                  ["Time", new Date(selectedBill.createdAt).toLocaleTimeString()], ["Customer", customerDisplay(selectedBill)],
-                  ["Order Type", selectedBill.orderType], ["Payment", selectedBill.paymentMethod]].map(([l, v]) => (
-                  <div key={l} style={{ display: "flex", justifyContent: "space-between", marginTop: "3px" }}>
-                    <span>{l}</span><span>{v}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
-              <div style={{ display: "flex", fontWeight: "bold", fontSize: "11px" }}>
-                <div style={{ flex: 1 }}>Item</div>
-                <div style={{ width: "36px", textAlign: "center" }}>Qty</div>
-                <div style={{ width: "52px", textAlign: "right" }}>Amount</div>
-              </div>
-              <div style={{ borderTop: "1px dashed black", margin: "5px 0 8px" }} />
-              <div>
-                {selectedBill.items?.map((item: any) => (
-                  <div key={item.id} style={{ display: "flex", marginBottom: "8px", fontSize: "11px" }}>
-                    <div style={{ flex: 1, paddingRight: "5px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.itemName}</div>
-                    <div style={{ width: "30px", textAlign: "center" }}>{item.quantity}</div>
-                    <div style={{ width: "52px", textAlign: "right" }}>₹{Number(item.total || 0).toFixed(2)}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
-              {[["Subtotal", `₹${Number(selectedBill.subtotal || selectedBill.total || 0).toFixed(2)}`], ["CGST", `₹${Number(selectedBill.cgst || 0).toFixed(2)}`], ["SGST", `₹${Number(selectedBill.sgst || 0).toFixed(2)}`]].map(([l, v]) => (
-                <div key={l} style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px", fontSize: "12px" }}>
-                  <span>{l}</span><span>{v}</span>
-                </div>
-              ))}
-              <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
-              <div style={{ display: "flex", justifyContent: "space-between", fontWeight: "900", fontSize: "16px" }}>
-                <span>TOTAL</span><span>₹{Number(selectedBill.total || 0).toFixed(2)}</span>
-              </div>
-              <div style={{ borderTop: "1px dashed black", margin: "8px 0" }} />
-              <div className="text-center">
-                <p style={{ fontSize: "13px", fontWeight: "bold" }}>Thank You Visit Again!</p>
-                <p style={{ marginTop: "3px", fontSize: "10px" }}>Powered by DineInk POS</p>
-              </div>
-            </div>
-            <div className="flex gap-2 px-4 pb-4">
-              <button onClick={() => setShowPrintPreview(false)}
-                className="flex-1 rounded-xl border border-gray-300 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50">
-                Close
-              </button>
-              <button onClick={handlePrint}
-                className="flex-1 rounded-xl bg-red-600 py-2 text-xs font-bold text-white transition hover:bg-red-700">
-                Print Bill
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
