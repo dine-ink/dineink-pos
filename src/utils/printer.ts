@@ -24,14 +24,39 @@ export function clearPrinter(): void {
 
 // ─── Bluetooth device list ────────────────────────────────────────────────────
 
-export async function listBluetoothDevices(): Promise<Array<{ name: string; address: string }>> {
-  if (!Capacitor.isNativePlatform()) return [];
+export interface BluetoothScanResult {
+  devices: Array<{ name: string; address: string }>;
+  error?: string;
+}
+
+export async function listBluetoothDevices(): Promise<BluetoothScanResult> {
+  if (!Capacitor.isNativePlatform()) {
+    return { devices: [], error: 'Bluetooth scanning only works on the Android app.' };
+  }
   try {
     const { BluetoothSerial } = await import('@ascentio-it/capacitor-bluetooth-serial');
+
+    const btState = await BluetoothSerial.isEnabled();
+    if (!btState.enabled) {
+      return { devices: [], error: 'Bluetooth is off. Turn on Bluetooth in Android settings and try again.' };
+    }
+
+    const hasPerms = await BluetoothSerial.checkBluetoothPermissions();
+    if (!hasPerms) {
+      return { devices: [], error: 'Bluetooth permission not granted. Go to Android Settings → Apps → DineInk → Permissions → enable "Nearby devices".' };
+    }
+
     const result = await BluetoothSerial.getPairedDevices();
-    return (result.devices ?? []) as Array<{ name: string; address: string }>;
-  } catch {
-    return [];
+    const devices = (result.devices ?? []) as Array<{ name: string; address: string }>;
+    if (devices.length === 0) {
+      return { devices: [], error: 'No paired Bluetooth devices found. Pair your printer in Android Bluetooth settings first, then scan again.' };
+    }
+    return { devices };
+  } catch (e: any) {
+    return {
+      devices: [],
+      error: e?.message || 'Bluetooth scan failed. Make sure Bluetooth is on and permissions are granted.',
+    };
   }
 }
 
