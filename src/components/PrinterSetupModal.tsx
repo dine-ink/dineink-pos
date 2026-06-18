@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Bluetooth, Wifi, X, Check, RefreshCw, Printer, Trash2, AlertCircle, Info } from 'lucide-react';
+import { Bluetooth, Wifi, X, Check, RefreshCw, Printer, Trash2, AlertCircle, Info, Zap } from 'lucide-react';
 import {
   listBluetoothDevices,
   getSavedPrinter,
   savePrinter,
   clearPrinter,
+  printTestPage,
   type PrinterConfig,
 } from '@/utils/printer';
 
@@ -22,6 +23,8 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
   const [wifiPort, setWifiPort] = useState('9100');
   const [showIpHelp, setShowIpHelp] = useState(false);
   const [saved, setSaved] = useState<PrinterConfig | null>(null);
+  const [testState, setTestState] = useState<'idle' | 'testing' | 'ok' | 'fail'>('idle');
+  const [testError, setTestError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -66,6 +69,20 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
   const removePrinter = () => {
     clearPrinter();
     setSaved(null);
+    setTestState('idle');
+    setTestError(null);
+  };
+
+  const runTestPrint = async () => {
+    setTestState('testing');
+    setTestError(null);
+    const result = await printTestPage();
+    if (result.success) {
+      setTestState('ok');
+    } else {
+      setTestState('fail');
+      setTestError(result.error || 'Test print failed.');
+    }
   };
 
   if (!isOpen) return null;
@@ -93,19 +110,48 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
         <div className="p-4 space-y-3">
           {/* current printer badge */}
           {saved && (
-            <div className="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5">
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">Active Printer</p>
-                <p className="text-xs font-bold text-gray-900 mt-0.5">{saved.name}</p>
-                <p className="text-[10px] text-gray-500 capitalize mt-0.5">{saved.type}</p>
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">Active Printer</p>
+                  <p className="text-xs font-bold text-gray-900 mt-0.5">{saved.name}</p>
+                  <p className="text-[10px] text-gray-500 capitalize mt-0.5">{saved.type}</p>
+                </div>
+                <button
+                  onClick={removePrinter}
+                  className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-50 transition"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Remove
+                </button>
               </div>
+
+              {/* Test print button + feedback */}
               <button
-                onClick={removePrinter}
-                className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-50 transition"
+                onClick={runTestPrint}
+                disabled={testState === 'testing'}
+                className={`flex w-full items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-black transition ${
+                  testState === 'ok'
+                    ? 'bg-emerald-500 text-white'
+                    : testState === 'fail'
+                    ? 'bg-red-500 text-white'
+                    : 'bg-white border border-emerald-400 text-emerald-700 hover:bg-emerald-100'
+                } disabled:opacity-60`}
               >
-                <Trash2 className="h-3 w-3" />
-                Remove
+                {testState === 'testing' ? (
+                  <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sending test print…</>
+                ) : testState === 'ok' ? (
+                  <><Check className="h-3.5 w-3.5" /> Printed! Printer is connected.</>
+                ) : testState === 'fail' ? (
+                  <><AlertCircle className="h-3.5 w-3.5" /> Failed — tap to retry</>
+                ) : (
+                  <><Zap className="h-3.5 w-3.5" /> Send Test Print</>
+                )}
               </button>
+
+              {testState === 'fail' && testError && (
+                <p className="text-[10px] text-red-600 leading-relaxed">{testError}</p>
+              )}
             </div>
           )}
 

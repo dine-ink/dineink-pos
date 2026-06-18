@@ -216,6 +216,60 @@ async function printWifi(ip: string, port: number, bill: BillData): Promise<bool
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+function buildTestReceipt(): string {
+  const now = new Date();
+  const date = now.toLocaleDateString('en-IN');
+  const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+  let r = '';
+  r += CMD.init;
+  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln('DINEINK POS') + CMD.normalSize + CMD.boldOff;
+  r += CMD.center + ln('--- TEST PRINT ---');
+  r += divider();
+  r += CMD.left;
+  r += padded('Date', date);
+  r += padded('Time', time);
+  r += divider();
+  r += CMD.center + CMD.boldOn + ln('Printer OK!') + CMD.boldOff;
+  r += CMD.center + ln('Connection successful.');
+  r += CMD.lf + CMD.lf + CMD.lf;
+  r += CMD.cut;
+  return r;
+}
+
+export async function printTestPage(): Promise<{ success: boolean; error?: string }> {
+  const config = getSavedPrinter();
+  if (!config) return { success: false, error: 'No printer configured.' };
+
+  if (config.type === 'wifi') {
+    if (!config.ip || config.ip === 'system') {
+      return { success: false, error: 'No IP address set for WiFi printer.' };
+    }
+    const ok = await printWifi(config.ip, config.port, {
+      shopName: 'DineInk POS',
+      billNo: 'TEST',
+      billingType: 'TEST',
+      paymentMethod: 'TEST',
+      items: [{ itemName: 'Test Item', quantity: 1, price: 0 }],
+      subtotal: 0, discountAmount: 0, cgst: 0, sgst: 0,
+      serviceChargeAmount: 0, packingCharge: 0, grandTotal: 0,
+    });
+    if (!ok) return { success: false, error: `Could not reach printer at ${config.ip}:${config.port}. Check IP and make sure phone is on same WiFi as printer.` };
+    return { success: true };
+  }
+
+  if (config.type === 'bluetooth') {
+    if (!Capacitor.isNativePlatform()) {
+      return { success: false, error: 'Bluetooth printing only works on Android.' };
+    }
+    const receipt = buildTestReceipt();
+    const ok = await printBluetooth(config.address, receipt);
+    if (!ok) return { success: false, error: `Could not connect to Bluetooth printer "${config.name}". Make sure it is powered on and in range.` };
+    return { success: true };
+  }
+
+  return { success: false, error: 'Unknown printer type.' };
+}
+
 export async function printReceipt(bill: BillData): Promise<boolean> {
   const config = getSavedPrinter();
   if (!config) return false;
