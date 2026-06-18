@@ -87,14 +87,40 @@ const CMD = {
 };
 // No left/boldOff/normalSize — use CMD.init to reset instead.
 
-const W = 32; // receipt width (characters)
+const W = 48; // receipt width — 80mm paper at standard ESC/POS Font A density
 
 function ln(text = ''): string { return text + CMD.lf; }
 
-function centered(text: string): string {
+function centeredLine(text: string): string {
   const t = text.substring(0, W);
   const pad = Math.max(0, Math.floor((W - t.length) / 2));
   return ln(' '.repeat(pad) + t);
+}
+
+// Handles embedded newlines and auto word-wraps lines longer than W chars
+function centered(text: string): string {
+  if (!text) return '';
+  if (text.includes('\n')) {
+    return text.split('\n').filter(l => l.trim()).map(l => centered(l.trim())).join('');
+  }
+  if (text.length <= W) return centeredLine(text);
+  // Word-wrap: break into ≤W-char lines, center each
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let cur = '';
+  for (const word of words) {
+    const w = word.substring(0, W);
+    if (!cur) { cur = w; }
+    else if (cur.length + 1 + w.length <= W) { cur += ' ' + w; }
+    else { lines.push(cur); cur = w; }
+  }
+  if (cur) lines.push(cur);
+  return lines.map(centeredLine).join('');
+}
+
+// Convert TAKE_AWAY / CASH / cash → "Take Away" / "Cash"
+function fmtLabel(s: string): string {
+  return s.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function padded(left: string, right: string, width = W): string {
@@ -134,7 +160,7 @@ function buildReceipt(bill: BillData): string {
   let r = '';
   // Header — use CMD.init after each bold section to reset (no null byte)
   r += CMD.init;
-  r += CMD.center + CMD.boldOn + ln(toAscii(bill.shopName).substring(0, W));
+  r += CMD.center + CMD.boldOn + ln(toAscii(bill.shopName));
   r += CMD.init; // resets bold + center → back to left, normal
   if (bill.shopAddress) r += centered(toAscii(bill.shopAddress));
   if (bill.shopGstin) r += centered('GSTIN: ' + bill.shopGstin);
@@ -144,8 +170,8 @@ function buildReceipt(bill: BillData): string {
   r += padded('Date', new Date().toLocaleDateString('en-IN'));
   r += padded('Time', new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
   r += padded('Customer', toAscii(bill.customerName || 'Walk-in'));
-  r += padded('Type', bill.billingType);
-  r += padded('Payment', bill.paymentMethod);
+  r += padded('Type', fmtLabel(bill.billingType));
+  r += padded('Payment', fmtLabel(bill.paymentMethod));
   r += divider();
   r += padded('Item', 'Qty   Amount');
   r += divider();
