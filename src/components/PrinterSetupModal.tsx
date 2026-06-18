@@ -186,16 +186,14 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
           {/* wifi panel */}
           {tab === 'wifi' && (
             <div className="space-y-2">
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
-                When you print, Android's print dialog will open — select your WiFi printer there.
-                Make sure your printer is set up in <strong>Android Settings → Print</strong>.
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-700 space-y-1">
+                <p>The app sends the bill <strong>directly to the printer</strong> over your WiFi network — no dialog, no popup.</p>
+                <p>Make sure your phone is connected to the <strong>same WiFi as the printer</strong> (or the printer's own hotspot).</p>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-2">
-                  <label className="mb-1 block text-[10px] font-bold text-gray-700">
-                    IP Address <span className="font-normal text-gray-400">(optional)</span>
-                  </label>
+                  <label className="mb-1 block text-[10px] font-bold text-gray-700">IP Address</label>
                   <input
                     value={wifiIp}
                     onChange={e => setWifiIp(e.target.value)}
@@ -221,19 +219,20 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
                 className="flex items-center gap-1.5 text-[11px] font-semibold text-red-500"
               >
                 <Info className="h-3.5 w-3.5" />
-                How to find my printer's IP address?
+                {showIpHelp ? 'Hide help' : 'How to find my printer\'s IP address?'}
               </button>
               {showIpHelp && (
                 <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 space-y-1.5 text-[11px] text-gray-600">
-                  <p><strong>Method 1 — Print config page:</strong> Hold the Feed button on your printer for 5 seconds while it's on. It will print a sheet showing its IP address.</p>
-                  <p><strong>Method 2 — Router admin:</strong> Open your router's admin page (usually 192.168.1.1) and look for connected devices or DHCP clients list.</p>
-                  <p><strong>Method 3 — Android WiFi:</strong> Android Settings → WiFi → tap your network → scroll to see connected devices (some routers show this).</p>
+                  <p><strong>Method 1 — Config print:</strong> Hold the Feed button on the printer for 5 sec while powered on. It prints a sheet with IP and WiFi info.</p>
+                  <p><strong>Printer hotspot (AP mode):</strong> If your phone is connected to the printer's own WiFi (e.g. KPC307-UEWB-xxxx), the IP is usually <strong>192.168.223.1</strong> and port <strong>9100</strong>.</p>
+                  <p><strong>Same router (STA mode):</strong> If both phone and printer are on your shop WiFi, check the router admin (192.168.1.1) → DHCP clients to find the printer's assigned IP.</p>
                 </div>
               )}
 
               <button
                 onClick={saveWifi}
-                className="w-full rounded-xl bg-red-500 py-2 text-xs font-black text-white shadow-sm hover:bg-red-600 transition"
+                disabled={!wifiIp.trim()}
+                className="w-full rounded-xl bg-red-500 py-2 text-xs font-black text-white shadow-sm hover:bg-red-600 transition disabled:opacity-50"
               >
                 Save WiFi Printer
               </button>
