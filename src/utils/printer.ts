@@ -61,34 +61,51 @@ export async function listBluetoothDevices(): Promise<BluetoothScanResult> {
 }
 
 // ─── ESC/POS helpers ──────────────────────────────────────────────────────────
+//
+// IMPORTANT: The Capacitor JS→Java bridge truncates strings at the first \x00
+// (null byte). Every ESC/POS "turn-off" command (boldOff, normalSize, left
+// align, standard cut) uses \x00 as the parameter byte. We avoid ALL of them:
+//
+//   ✗  ESC E \x00  = bold off      → truncates here
+//   ✗  ESC ! \x00  = normal size   → truncates here
+//   ✗  ESC a \x00  = left align    → truncates here
+//   ✗  GS  V B \x00 = cut         → truncates here
+//
+// Instead we use CMD.init (ESC @) to reset bold/alignment (no \x00), space-
+// padding to center text, and GS V \x01 (partial cut, no \x00) for the cutter.
 
 function b(...bytes: number[]): string {
   return bytes.map(c => String.fromCharCode(c)).join('');
 }
 
 const CMD = {
-  init:       b(0x1B, 0x40),
-  center:     b(0x1B, 0x61, 0x01),
-  left:       b(0x1B, 0x61, 0x00),
-  boldOn:     b(0x1B, 0x45, 0x01),
-  boldOff:    b(0x1B, 0x45, 0x00),
-  doubleSize: b(0x1B, 0x21, 0x30),
-  normalSize: b(0x1B, 0x21, 0x00),
-  cut:        b(0x1D, 0x56, 0x42, 0x00),
-  lf:         '\n',
+  init:   b(0x1B, 0x40),        // ESC @  — reset all (no \x00) ✓
+  center: b(0x1B, 0x61, 0x01),  // ESC a 1 — center align ✓
+  boldOn: b(0x1B, 0x45, 0x01),  // ESC E 1 — bold on ✓
+  cut:    b(0x1D, 0x56, 0x01),  // GS  V 1 — partial cut (no \x00) ✓
+  lf:     '\n',
 };
+// No left/boldOff/normalSize — use CMD.init to reset instead.
+
+const W = 32; // receipt width (characters)
 
 function ln(text = ''): string { return text + CMD.lf; }
 
-function padded(left: string, right: string, width = 32): string {
+function centered(text: string): string {
+  const t = text.substring(0, W);
+  const pad = Math.max(0, Math.floor((W - t.length) / 2));
+  return ln(' '.repeat(pad) + t);
+}
+
+function padded(left: string, right: string, width = W): string {
   const gap = Math.max(1, width - left.length - right.length);
   return ln(left + ' '.repeat(gap) + right);
 }
 
-function divider(ch = '-', width = 32): string { return ln(ch.repeat(width)); }
+function divider(ch = '-', width = W): string { return ln(ch.repeat(width)); }
 
 function toAscii(s: string): string {
-  return s.replace(/₹/g, 'Rs.').replace(/[^\x00-\x7F]/g, '?');
+  return s.replace(/[₹]/g, 'Rs.').replace(/[^\x01-\x7F]/g, '?');
 }
 
 // ─── Bill data type ───────────────────────────────────────────────────────────
@@ -115,12 +132,14 @@ export type BillData = {
 
 function buildReceipt(bill: BillData): string {
   let r = '';
+  // Header — use CMD.init after each bold section to reset (no null byte)
   r += CMD.init;
-  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln(toAscii(bill.shopName)) + CMD.normalSize + CMD.boldOff;
-  if (bill.shopAddress) r += CMD.center + ln(toAscii(bill.shopAddress));
-  if (bill.shopGstin) r += CMD.center + ln('GSTIN: ' + bill.shopGstin);
+  r += CMD.center + CMD.boldOn + ln(toAscii(bill.shopName).substring(0, W));
+  r += CMD.init; // resets bold + center → back to left, normal
+  if (bill.shopAddress) r += centered(toAscii(bill.shopAddress));
+  if (bill.shopGstin) r += centered('GSTIN: ' + bill.shopGstin);
   r += divider();
-  r += CMD.left;
+  // Details (left-aligned by default after CMD.init)
   r += padded('Bill No', bill.billNo);
   r += padded('Date', new Date().toLocaleDateString('en-IN'));
   r += padded('Time', new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }));
@@ -128,7 +147,7 @@ function buildReceipt(bill: BillData): string {
   r += padded('Type', bill.billingType);
   r += padded('Payment', bill.paymentMethod);
   r += divider();
-  r += CMD.boldOn + padded('Item', 'Qty   Amount') + CMD.boldOff;
+  r += padded('Item', 'Qty   Amount');
   r += divider();
   for (const item of bill.items) {
     const name = toAscii(item.itemName).substring(0, 18);
@@ -143,13 +162,16 @@ function buildReceipt(bill: BillData): string {
   if (bill.serviceChargeAmount > 0) r += padded('Service Chg', `Rs.${bill.serviceChargeAmount.toFixed(2)}`);
   if (bill.packingCharge > 0) r += padded('Packing', `Rs.${bill.packingCharge.toFixed(2)}`);
   r += divider('=');
-  r += CMD.boldOn + padded('TOTAL', `Rs.${bill.grandTotal.toFixed(0)}`) + CMD.boldOff;
+  // Bold total — use CMD.init after to reset bold (no null bytes needed)
+  r += CMD.boldOn + padded('TOTAL', `Rs.${bill.grandTotal.toFixed(0)}`);
+  r += CMD.init; // resets bold, back to left
   r += divider('=');
   r += CMD.center;
   r += ln('Thank You!  Visit Again');
   r += ln('Powered by DineInk POS');
+  // End with CMD.center — no need to go back to left, receipt is done
   r += CMD.lf + CMD.lf + CMD.lf + CMD.lf;
-  r += CMD.cut;
+  r += CMD.cut; // GS V 1 — partial cut, no null byte
   return r;
 }
 
@@ -160,6 +182,8 @@ async function printBluetooth(address: string, receipt: string): Promise<boolean
     const { BluetoothSerial } = await import('@ascentio-it/capacitor-bluetooth-serial');
     await BluetoothSerial.connect({ address });
     await BluetoothSerial.write({ address, value: receipt });
+    // Wait for the serial buffer to flush before closing the connection
+    await new Promise(r => setTimeout(r, 1200));
     await BluetoothSerial.disconnect({ address });
     return true;
   } catch {
@@ -222,15 +246,16 @@ function buildTestReceipt(): string {
   const time = now.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
   let r = '';
   r += CMD.init;
-  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln('DINEINK POS') + CMD.normalSize + CMD.boldOff;
-  r += CMD.center + ln('--- TEST PRINT ---');
+  r += CMD.center + CMD.boldOn + ln('DINEINK POS');
+  r += CMD.init; // reset bold + center → left, normal
+  r += centered('--- TEST PRINT ---');
   r += divider();
-  r += CMD.left;
   r += padded('Date', date);
   r += padded('Time', time);
   r += divider();
-  r += CMD.center + CMD.boldOn + ln('Printer OK!') + CMD.boldOff;
-  r += CMD.center + ln('Connection successful.');
+  r += CMD.boldOn + centered('Printer OK!');
+  r += CMD.init;
+  r += centered('Connection successful.');
   r += CMD.lf + CMD.lf + CMD.lf;
   r += CMD.cut;
   return r;
