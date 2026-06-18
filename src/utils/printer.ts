@@ -198,7 +198,7 @@ export type BillData = {
 // ─── ESC/POS receipt builder ──────────────────────────────────────────────────
 
 function buildReceipt(bill: BillData): string {
-  const WIDTH = 48;
+  const WIDTH = 72;
   const NAME_W = 32;
   const QTY_W = 4;
   const AMT_W = 12;
