@@ -198,123 +198,63 @@ export type BillData = {
 // ─── ESC/POS receipt builder ──────────────────────────────────────────────────
 
 function buildReceipt(bill: BillData): string {
-  const WIDTH = 72;
-  const NAME_W = 32;
-  const QTY_W = 4;
-  const AMT_W = 12;
-
-  const divider = (ch = "-") => ln(ch.repeat(WIDTH));
-
-  const center = (text: string) => {
-    const pad = Math.max(0, Math.floor((WIDTH - text.length) / 2));
-    return ln(" ".repeat(pad) + text);
-  };
-
-  const leftRight = (left: string, right: string) => {
-    return ln(left.padEnd(WIDTH - right.length) + right);
-  };
-
   let r = "";
 
-  /* ---------- HEADER ---------- */
-
+  // Header
   r += CMD.init;
-  r += CMD.center;
-  r += CMD.boldOn;
-
-  r += center(toAscii(bill.shopName).substring(0, WIDTH));
-
-  r += CMD.init;
-
-  if (bill.shopAddress)
-    r += center(toAscii(bill.shopAddress).substring(0, WIDTH));
-
-  if (bill.shopGstin) r += center(`GSTIN : ${bill.shopGstin}`);
-
+  r += CMD.center + CMD.boldOn + ln(toAscii(bill.shopName));
+  r += CMD.init; // reset bold + center → left, normal
+  if (bill.shopAddress) r += centered(toAscii(bill.shopAddress));
+  if (bill.shopGstin) r += centered("GSTIN: " + bill.shopGstin);
   r += divider("=");
 
-  /* ---------- BILL DETAILS ---------- */
-
-  const date = new Date();
-
-  r += leftRight(`Bill : ${bill.billNo}`, date.toLocaleDateString("en-IN"));
-
-  r += leftRight(
-    `Time : ${date.toLocaleTimeString("en-IN", {
+  // Bill details — label left, value right, full W=48 width
+  r += padded("Bill No", bill.billNo);
+  r += padded("Date", new Date().toLocaleDateString("en-IN"));
+  r += padded(
+    "Time",
+    new Date().toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
-    })}`,
-    `Pay : ${fmtLabel(bill.paymentMethod)}`,
+    }),
   );
-
-  r += leftRight("Customer", toAscii(bill.customerName || "Walk-in"));
-
-  r += leftRight("Type", fmtLabel(bill.billingType));
-
+  r += padded("Customer", toAscii(bill.customerName || "Walk-in"));
+  r += padded("Type", fmtLabel(bill.billingType));
+  r += padded("Payment", fmtLabel(bill.paymentMethod));
   r += divider();
 
-  /* ---------- ITEMS ---------- */
-
-  r += ln(
-    "Item".padEnd(NAME_W) + "Qty".padStart(QTY_W) + "Amount".padStart(AMT_W),
-  );
-
+  // Items — 3 columns: Name(24) | Qty(6) | Amount(18) = 48
+  r += ln("Item".padEnd(24) + "Qty".padStart(6) + "Amount".padStart(18));
   r += divider();
-
   for (const item of bill.items) {
-    const name = toAscii(item.itemName).substring(0, NAME_W).padEnd(NAME_W);
-
-    const qty = String(item.quantity).padStart(QTY_W);
-
-    const amount = (item.price * item.quantity).toFixed(2).padStart(AMT_W);
-
-    r += ln(name + qty + amount);
+    const name = toAscii(item.itemName).substring(0, 24).padEnd(24);
+    const qty = String(item.quantity).padStart(6);
+    const amt = `Rs.${(item.price * item.quantity).toFixed(0)}`.padStart(18);
+    r += ln(name + qty + amt);
   }
-
   r += divider();
 
-  /* ---------- TOTALS ---------- */
-
-  r += leftRight("Subtotal", bill.subtotal.toFixed(2));
-
+  // Totals
+  r += padded("Subtotal", `Rs.${bill.subtotal.toFixed(2)}`);
   if (bill.discountAmount > 0)
-    r += leftRight("Discount", "-" + bill.discountAmount.toFixed(2));
-
-  if (bill.cgst > 0) r += leftRight("CGST", bill.cgst.toFixed(2));
-
-  if (bill.sgst > 0) r += leftRight("SGST", bill.sgst.toFixed(2));
-
+    r += padded("Discount", `-Rs.${bill.discountAmount.toFixed(2)}`);
+  if (bill.cgst > 0) r += padded("CGST", `Rs.${bill.cgst.toFixed(2)}`);
+  if (bill.sgst > 0) r += padded("SGST", `Rs.${bill.sgst.toFixed(2)}`);
   if (bill.serviceChargeAmount > 0)
-    r += leftRight("Service Charge", bill.serviceChargeAmount.toFixed(2));
-
+    r += padded("Service Chg", `Rs.${bill.serviceChargeAmount.toFixed(2)}`);
   if (bill.packingCharge > 0)
-    r += leftRight("Packing", bill.packingCharge.toFixed(2));
-
+    r += padded("Packing", `Rs.${bill.packingCharge.toFixed(2)}`);
   r += divider("=");
 
-  /* ---------- GRAND TOTAL ---------- */
-
-  r += CMD.boldOn;
-
-  r += leftRight("TOTAL", `Rs.${bill.grandTotal.toFixed(2)}`);
-
+  r += CMD.boldOn + padded("TOTAL", `Rs.${bill.grandTotal.toFixed(0)}`);
   r += CMD.init;
-
   r += divider("=");
 
-  /* ---------- FOOTER ---------- */
-
+  // Footer
   r += CMD.center;
-
-  r += center("Thank You! Visit Again");
-
-  r += center("Powered by DineInk POS");
-
-  r += CMD.lf;
-  r += CMD.lf;
-  r += CMD.lf;
-  r += CMD.lf;
-
+  r += ln("Thank You!  Visit Again");
+  r += ln("Powered by DineInk POS");
+  r += CMD.lf + CMD.lf + CMD.lf + CMD.lf;
   r += CMD.cut;
 
   return r;
