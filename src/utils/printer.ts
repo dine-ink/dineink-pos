@@ -173,12 +173,14 @@ function buildReceipt(bill: BillData): string {
   r += padded('Type', fmtLabel(bill.billingType));
   r += padded('Payment', fmtLabel(bill.paymentMethod));
   r += divider();
-  r += padded('Item', 'Qty   Amount');
+  // 3-column item table: Name(24) | Qty(6) | Amount(18) = 48
+  r += ln('Item'.padEnd(24) + 'Qty'.padStart(6) + 'Amount'.padStart(18));
   r += divider();
   for (const item of bill.items) {
-    const name = toAscii(item.itemName).substring(0, 18);
-    const amt = `${item.quantity}  Rs.${(item.price * item.quantity).toFixed(0)}`;
-    r += padded(name, amt);
+    const name = toAscii(item.itemName).substring(0, 24).padEnd(24);
+    const qty = String(item.quantity).padStart(6);
+    const amt = `Rs.${(item.price * item.quantity).toFixed(0)}`.padStart(18);
+    r += ln(name + qty + amt);
   }
   r += divider();
   r += padded('Subtotal', `Rs.${bill.subtotal.toFixed(2)}`);
