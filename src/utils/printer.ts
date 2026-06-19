@@ -229,7 +229,6 @@ function buildReceipt(bill: BillData): string {
   /* ---------- DETAILS ---------- */
 
   r += ln(`Bill No    : ${bill.billNo}`);
-  r += centered(`GSTIN: ${bill.shopGstin}`);
   r += ln(`Date       : ${now.toLocaleDateString("en-IN")}`);
 
   r += ln(
@@ -510,7 +509,7 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function printReceiptBrowser(bill: BillData): void {
+function printReceiptBrowser(bill: BillData): any {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-IN");
   const timeStr = now.toLocaleTimeString("en-IN", {
@@ -671,7 +670,7 @@ export async function printReceipt(bill: BillData): Promise<boolean> {
     return printWifi(config.ip, config.port, bill);
   }
   if (config.type === "bluetooth") {
-    return printBluetooth(config.address, buildReceipt(bill));
+    return printBluetooth(config.address, printReceiptBrowser(bill));
   }
   return false;
 }
