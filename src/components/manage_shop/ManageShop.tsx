@@ -1,13 +1,15 @@
-import { ClipboardList, Boxes, ChartNoAxesColumn } from "lucide-react";
+import { ClipboardList, Boxes, ChartNoAxesColumn, Wallet } from "lucide-react";
 import { useState } from "react";
 import Attendance from "./Attendance";
 import Expense from "./Expense";
 import Inventry from "./Inventry";
+import CashSession from "./CashSession";
 
 const tabs = [
   { id: "Attendance", label: "Attendance", icon: ChartNoAxesColumn },
   { id: "Expense Details", label: "Expenses", icon: ClipboardList },
   { id: "Update Inventory", label: "Inventory", icon: Boxes },
+  { id: "Cash Session", label: "Cash", icon: Wallet },
 ];
 
 export default function ManageShop() {
@@ -44,6 +46,7 @@ export default function ManageShop() {
         {tab === "Attendance" && <Attendance />}
         {tab === "Expense Details" && <Expense />}
         {tab === "Update Inventory" && <Inventry />}
+        {tab === "Cash Session" && <CashSession />}
       </div>
     </div>
   );
