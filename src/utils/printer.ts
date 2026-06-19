@@ -201,66 +201,154 @@ export type BillData = {
 
 function buildReceipt(bill: BillData): string {
   let r = "";
-  // Item column widths: 28 name + 5 qty + 15 amount = 48 = W
-  const IC = 28,
-    QC = 5,
-    AC = 15;
+
+  const IC = 28;
+  const QC = 5;
+  const AC = 15;
 
   const now = new Date();
 
   r += CMD.init;
-  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln(toAscii(bill.shopName).toUpperCase());
+
+  /* ---------- HEADER ---------- */
+
+  r += CMD.center;
+  r += CMD.boldOn;
+  r += CMD.doubleSize;
+
+  r += ln(toAscii(bill.shopName).toUpperCase());
+
   r += CMD.init;
-  if (bill.shopAddress) r += CMD.center + ln(toAscii(bill.shopAddress));
-  if (bill.shopGstin) r += CMD.center + ln("GSTIN: " + bill.shopGstin);
-  r += CMD.init;
+
+  if (bill.shopAddress) r += centered(toAscii(bill.shopAddress));
+
+  if (bill.shopGstin) r += centered(`GSTIN: ${bill.shopGstin}`);
+
   r += divider();
-  r += padded("Bill No", bill.billNo);
-  r += padded("Date", now.toLocaleDateString("en-IN"));
-  r += padded(
-    "Time",
-    now.toLocaleTimeString("en-IN", {
+
+  /* ---------- DETAILS ---------- */
+
+  r += ln(`Bill No    : ${bill.billNo}`);
+  r += centered(`GSTIN: ${bill.shopGstin}`);
+  r += ln(`Date       : ${now.toLocaleDateString("en-IN")}`);
+
+  r += ln(
+    `Time       : ${now.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: true,
-    }),
+    })}`,
   );
-  r += padded("Customer", toAscii(bill.customerName || "Walk-in"));
-  r += padded("Order Type", fmtLabel(bill.billingType));
-  r += padded("Payment", fmtLabel(bill.paymentMethod));
+
+  r += ln(`Customer   : ${toAscii(bill.customerName || "Walk-in")}`);
+
+  r += ln(`Order Type : ${fmtLabel(bill.billingType)}`);
+
+  r += ln(`Payment    : ${fmtLabel(bill.paymentMethod)}`);
+
   r += divider();
-  r +=
-    CMD.boldOn +
-    ln("Item".padEnd(IC) + "Qty".padStart(QC) + "Amount".padStart(AC)) +
-    CMD.init;
+
+  /* ---------- ITEMS ---------- */
+
+  r += CMD.boldOn;
+
+  r += ln("ITEM".padEnd(IC) + "QTY".padStart(QC) + "AMOUNT".padStart(AC));
+
+  r += CMD.init;
+
   r += divider();
+
   for (const item of bill.items) {
-    const name = toAscii(item.itemName).substring(0, IC).padEnd(IC);
+    const name = toAscii(item.itemName)
+      .substring(0, IC)
+
+      .padEnd(IC);
+
     const qty = String(item.quantity).padStart(QC);
+
     const amt = `Rs.${(item.price * item.quantity).toFixed(2)}`.padStart(AC);
+
     r += ln(name + qty + amt);
   }
+
   r += divider();
-  r += padded("Subtotal", `Rs.${bill.subtotal.toFixed(2)}`);
+
+  /* ---------- TOTALS ---------- */
+
+  r += padded(
+    "Subtotal",
+
+    `Rs.${bill.subtotal.toFixed(2)}`,
+  );
+
   if (bill.discountAmount > 0)
-    r += padded("Discount", `-Rs.${bill.discountAmount.toFixed(2)}`);
-  if (bill.cgst > 0) r += padded("CGST", `Rs.${bill.cgst.toFixed(2)}`);
-  if (bill.sgst > 0) r += padded("SGST", `Rs.${bill.sgst.toFixed(2)}`);
+    r += padded(
+      "Discount",
+
+      `-Rs.${bill.discountAmount.toFixed(2)}`,
+    );
+
+  if (bill.cgst > 0)
+    r += padded(
+      "CGST",
+
+      `Rs.${bill.cgst.toFixed(2)}`,
+    );
+
+  if (bill.sgst > 0)
+    r += padded(
+      "SGST",
+
+      `Rs.${bill.sgst.toFixed(2)}`,
+    );
+
   if (bill.serviceChargeAmount > 0)
-    r += padded("Service Charge", `Rs.${bill.serviceChargeAmount.toFixed(2)}`);
+    r += padded(
+      "Service Charge",
+
+      `Rs.${bill.serviceChargeAmount.toFixed(2)}`,
+    );
+
   if (bill.packingCharge > 0)
-    r += padded("Packing Charge", `Rs.${bill.packingCharge.toFixed(2)}`);
-  r += divider();
-  r +=
-    CMD.boldOn + padded("TOTAL", `Rs.${bill.grandTotal.toFixed(2)}`) + CMD.init;
-  r += divider();
-  r += CMD.center + ln("Thank You For Visiting");
-  r += CMD.center + ln("Please Visit Again");
+    r += padded(
+      "Packing Charge",
+
+      `Rs.${bill.packingCharge.toFixed(2)}`,
+    );
+
+  r += divider("=");
+
+  /* ---------- TOTAL ---------- */
+
+  r += CMD.boldOn;
+
+  r += padded(
+    "TOTAL",
+
+    `Rs.${bill.grandTotal.toFixed(2)}`,
+  );
+
+  r += CMD.init;
+
+  r += divider("=");
+
+  /* ---------- FOOTER ---------- */
+
+  r += CMD.center;
+
+  r += ln("Thank You For Visiting");
+
+  r += ln("Please Visit Again");
+
   r += CMD.lf;
-  r += CMD.center + ln("Powered by DineInk POS");
-  r += CMD.lf + CMD.lf + CMD.lf + CMD.lf;
+
+  r += ln("Powered by DineInk POS");
+
+  r += CMD.lf.repeat(4);
+
   r += CMD.cut;
+
   return r;
 }
 
