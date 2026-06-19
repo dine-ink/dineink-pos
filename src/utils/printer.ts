@@ -461,216 +461,27 @@ function printReceiptBrowser(bill: BillData): void {
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Bill ${escHtml(bill.billNo)}</title>
 <style>
-  *{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-}
-
-body{
-
-    font-family: monospace;
-
-    color:#000;
-
-    font-size:11px;
-
-    line-height:1.25;
-
-    padding:2px;
-
-}
-
-
-
-.sname{
-
-    text-align:center;
-
-    font-size:18px;
-
-    font-weight:900;
-
-    text-transform:uppercase;
-
-    letter-spacing:1px;
-
-    margin-bottom:2px;
-
-}
-
-
-.addr{
-
-    text-align:center;
-
-    font-size:10px;
-
-    line-height:1.3;
-
-    margin-bottom:1px;
-
-}
-
-
-
-.ds{
-
-    border-top:1px dashed black;
-
-    margin:4px 0;
-
-}
-
-
-
-.dd{
-
-    border-top:2px solid black;
-
-    margin:5px 0;
-
-}
-
-
-
-.row{
-
-    display:flex;
-
-    justify-content:space-between;
-
-    padding:1px 0;
-
-    font-size:11px;
-
-}
-
-
-
-.lbl{
-
-    font-weight:600;
-
-}
-
-
-
-.val{
-
-    text-align:right;
-
-}
-
-
-
-table{
-
-    width:100%;
-
-    border-collapse:collapse;
-
-}
-
-
-
-.ih th{
-
-
-    font-size:11px;
-
-    font-weight:800;
-
-    padding:4px 0;
-
-    border-bottom:1px dashed black;
-
-}
-
-
-
-.IN{
-
-
-    width:60%;
-
-    padding:3px 0;
-
-    word-break:break-word;
-
-}
-
-
-
-.IQ{
-
-
-    width:10%;
-
-    text-align:center;
-
-}
-
-
-
-.IA{
-
-
-    width:30%;
-
-    text-align:right;
-
-    font-weight:700;
-
-}
-
-
-
-.totrow{
-
-
-    display:flex;
-
-    justify-content:space-between;
-
-
-    font-size:16px;
-
-    font-weight:900;
-
-
-    padding:6px 0;
-
-
-    border-top:2px solid black;
-
-    border-bottom:2px solid black;
-
-}
-
-
-
-.foot{
-
-
-    text-align:center;
-
-
-    font-size:10px;
-
-
-    line-height:1.5;
-
-
-    padding-top:5px;
-
-}
-
-
-
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:monospace;color:#000;font-size:11px;line-height:1.25;padding:2px}
+.sname{text-align:center;font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:1px;margin-bottom:2px}
+.addr{text-align:center;font-size:10px;line-height:1.3;margin-bottom:1px}
+.ds{border-top:1px dashed black;margin:4px 0}
+.dd{border-top:2px solid black;margin:5px 0}
+.row{display:flex;justify-content:space-between;padding:1px 0;font-size:11px}
+.lbl{font-weight:600}
+.val{text-align:right}
+table{width:100%;border-collapse:collapse}
+.ih th{font-size:11px;font-weight:800;padding:4px 0;border-bottom:1px dashed black;text-align:left}
+.ih th.IQ{text-align:center}
+.ih th.IA{text-align:right}
+.IN{width:60%;padding:3px 0;word-break:break-word}
+.IQ{width:10%;text-align:center}
+.IA{width:30%;text-align:right;font-weight:700}
+.totrow{display:flex;justify-content:space-between;font-size:16px;font-weight:900;padding:6px 0;border-top:2px solid black;border-bottom:2px solid black}
+.foot{text-align:center;font-size:10px;line-height:1.5;padding-top:5px}
 @media print{
 @page{margin:0;size:80mm auto}
-body{padding:0 5mm 0 0}
+body{padding:0 6mm 0 1mm}
 }
 </style></head><body>
 <div class="sname">${escHtml(bill.shopName)}</div>
