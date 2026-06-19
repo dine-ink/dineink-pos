@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Capacitor } from "@capacitor/core";
 import { useAppSelector } from "@/store/hooks";
 import { MagnifyingGlassIcon, PrinterIcon } from "@heroicons/react/24/solid";
 import PageLoader from "@/components/ui/PageLoader";
@@ -25,6 +26,9 @@ export default function OrderHistory() {
   const [loading, setLoading] = useState(true);
   const [hasPrinter, setHasPrinter] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
+  // On web/laptop the browser print dialog handles USB printers — always enabled
+  const isNative = Capacitor.isNativePlatform();
+  const canPrint = !isNative || hasPrinter;
 
   useEffect(() => {
     setHasPrinter(!!getSavedPrinter());
@@ -159,9 +163,9 @@ export default function OrderHistory() {
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => handleDirectPrint(order)}
-                    disabled={!hasPrinter}
-                    title={hasPrinter ? "Print Bill" : "No printer configured"}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${hasPrinter ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
+                    disabled={!canPrint}
+                    title={canPrint ? "Print Bill" : "No printer configured"}
+                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                     <PrinterIcon className="h-3.5 w-3.5" />
                   </button>
                   {order.orderStatus !== "COMPLETED" && (
@@ -218,9 +222,9 @@ export default function OrderHistory() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={() => handleDirectPrint(order)}
-                          disabled={!hasPrinter}
-                          title={hasPrinter ? "Print Bill" : "No printer configured"}
-                          className={`flex h-6 w-6 items-center justify-center rounded-md transition ${hasPrinter ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
+                          disabled={!canPrint}
+                          title={canPrint ? "Print Bill" : "No printer configured"}
+                          className={`flex h-6 w-6 items-center justify-center rounded-md transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                           <PrinterIcon className="h-3 w-3" />
                         </button>
                         {order.orderStatus !== "COMPLETED" && (

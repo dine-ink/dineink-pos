@@ -104,13 +104,15 @@ function b(...bytes: number[]): string {
 }
 
 const CMD = {
-  init: b(0x1b, 0x40), // ESC @  — reset all (no \x00) ✓
-  center: b(0x1b, 0x61, 0x01), // ESC a 1 — center align ✓
-  boldOn: b(0x1b, 0x45, 0x01), // ESC E 1 — bold on ✓
-  cut: b(0x1d, 0x56, 0x01), // GS  V 1 — partial cut (no \x00) ✓
+  init: b(0x1b, 0x40), // ESC @ — resets bold, size, alignment (no null bytes)
+  center: b(0x1b, 0x61, 0x01),
+  boldOn: b(0x1b, 0x45, 0x01),
+  doubleSize: b(0x1b, 0x21, 0x30),
+  cut: b(0x1d, 0x56, 0x01), // GS V 1 — partial cut, no null byte
   lf: "\n",
 };
-// No left/boldOff/normalSize — use CMD.init to reset instead.
+// left/boldOff/normalSize all use 0x00 which truncates the Capacitor bridge string.
+// Use CMD.init (ESC @) to reset bold, size, and alignment instead.
 
 const W = 48; // receipt width — 80mm paper at standard ESC/POS Font A density
 
@@ -199,64 +201,64 @@ export type BillData = {
 
 function buildReceipt(bill: BillData): string {
   let r = "";
+  // Item column widths: 28 name + 5 qty + 15 amount = 48 = W
+  const IC = 28,
+    QC = 5,
+    AC = 15;
 
-  // Header
+  const now = new Date();
+
   r += CMD.init;
-  r += CMD.center + CMD.boldOn + ln(toAscii(bill.shopName));
-  r += CMD.init; // reset bold + center → left, normal
-  if (bill.shopAddress) r += centered(toAscii(bill.shopAddress));
-  if (bill.shopGstin) r += centered("GSTIN: " + bill.shopGstin);
-  r += divider("=");
-
-  // Bill details — label left, value right, full W=48 width
+  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln(toAscii(bill.shopName));
+  r += CMD.init;
+  if (bill.shopAddress) r += CMD.center + ln(toAscii(bill.shopAddress));
+  if (bill.shopGstin) r += CMD.center + ln("GSTIN: " + bill.shopGstin);
+  r += CMD.init;
+  r += divider();
   r += padded("Bill No", bill.billNo);
-  r += padded("Date", new Date().toLocaleDateString("en-IN"));
+  r += padded("Date", now.toLocaleDateString("en-IN"));
   r += padded(
     "Time",
-    new Date().toLocaleTimeString("en-IN", {
+    now.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
+      second: "2-digit",
+      hour12: true,
     }),
   );
   r += padded("Customer", toAscii(bill.customerName || "Walk-in"));
-  r += padded("Type", fmtLabel(bill.billingType));
+  r += padded("Order Type", fmtLabel(bill.billingType));
   r += padded("Payment", fmtLabel(bill.paymentMethod));
   r += divider();
-
-  // Items — 3 columns: Name(24) | Qty(6) | Amount(18) = 48
-  r += ln("Item".padEnd(24) + "Qty".padStart(6) + "Amount".padStart(18));
+  r +=
+    CMD.boldOn +
+    ln("Item".padEnd(IC) + "Qty".padStart(QC) + "Amount".padStart(AC)) +
+    CMD.init;
   r += divider();
   for (const item of bill.items) {
-    const name = toAscii(item.itemName).substring(0, 24).padEnd(24);
-    const qty = String(item.quantity).padStart(6);
-    const amt = `Rs.${(item.price * item.quantity).toFixed(0)}`.padStart(18);
+    const name = toAscii(item.itemName).substring(0, IC).padEnd(IC);
+    const qty = String(item.quantity).padStart(QC);
+    const amt = `Rs.${(item.price * item.quantity).toFixed(2)}`.padStart(AC);
     r += ln(name + qty + amt);
   }
   r += divider();
-
-  // Totals
   r += padded("Subtotal", `Rs.${bill.subtotal.toFixed(2)}`);
   if (bill.discountAmount > 0)
     r += padded("Discount", `-Rs.${bill.discountAmount.toFixed(2)}`);
   if (bill.cgst > 0) r += padded("CGST", `Rs.${bill.cgst.toFixed(2)}`);
   if (bill.sgst > 0) r += padded("SGST", `Rs.${bill.sgst.toFixed(2)}`);
   if (bill.serviceChargeAmount > 0)
-    r += padded("Service Chg", `Rs.${bill.serviceChargeAmount.toFixed(2)}`);
+    r += padded("Service Charge", `Rs.${bill.serviceChargeAmount.toFixed(2)}`);
   if (bill.packingCharge > 0)
-    r += padded("Packing", `Rs.${bill.packingCharge.toFixed(2)}`);
-  r += divider("=");
-
-  r += CMD.boldOn + padded("TOTAL", `Rs.${bill.grandTotal.toFixed(0)}`);
-  r += CMD.init;
-  r += divider("=");
-
-  // Footer
-  r += CMD.center;
-  r += ln("Thank You!  Visit Again");
-  r += ln("Powered by DineInk POS");
+    r += padded("Packing Charge", `Rs.${bill.packingCharge.toFixed(2)}`);
+  r += divider();
+  r +=
+    CMD.boldOn + padded("TOTAL", `Rs.${bill.grandTotal.toFixed(2)}`) + CMD.init;
+  r += divider();
+  r += CMD.center + ln("Thank You Visit Again!");
+  r += CMD.center + ln("Powered by DineInk POS");
   r += CMD.lf + CMD.lf + CMD.lf + CMD.lf;
   r += CMD.cut;
-
   return r;
 }
 
@@ -410,19 +412,365 @@ export async function printTestPage(): Promise<{
   return { success: false, error: "Unknown printer type." };
 }
 
+// ─── Browser / USB print (web / laptop) ──────────────────────────────────────
+// Opens an 80mm-sized HTML receipt in a new window and triggers window.print().
+// The OS print dialog shows all installed printers including USB thermal printers.
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function printReceiptBrowser(bill: BillData): void {
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("en-IN");
+  const timeStr = now.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+
+  const drow = (l: string, v: string) =>
+    `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`;
+
+  const itemRows = bill.items
+    .map(
+      (item) =>
+        `<tr>` +
+        `<td class="IN">${escHtml(item.itemName)}</td>` +
+        `<td class="IQ">${item.quantity}</td>` +
+        `<td class="IA">&#8377;${(item.price * item.quantity).toFixed(2)}</td>` +
+        `</tr>`,
+    )
+    .join("");
+
+  const extraRows = [
+    bill.discountAmount > 0
+      ? drow("Discount", `-&#8377;${bill.discountAmount.toFixed(2)}`)
+      : "",
+    bill.cgst > 0 ? drow("CGST", `&#8377;${bill.cgst.toFixed(2)}`) : "",
+    bill.sgst > 0 ? drow("SGST", `&#8377;${bill.sgst.toFixed(2)}`) : "",
+    bill.serviceChargeAmount > 0
+      ? drow("Service Charge", `&#8377;${bill.serviceChargeAmount.toFixed(2)}`)
+      : "",
+    bill.packingCharge > 0
+      ? drow("Packing Charge", `&#8377;${bill.packingCharge.toFixed(2)}`)
+      : "",
+  ].join("");
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Bill ${escHtml(bill.billNo)}</title>
+<style>
+  *{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+body{
+
+    font-family: monospace;
+
+    color:#000;
+
+    font-size:11px;
+
+    line-height:1.25;
+
+    padding:2px;
+
+}
+
+
+
+.sname{
+
+    text-align:center;
+
+    font-size:18px;
+
+    font-weight:900;
+
+    text-transform:uppercase;
+
+    letter-spacing:1px;
+
+    margin-bottom:2px;
+
+}
+
+
+.addr{
+
+    text-align:center;
+
+    font-size:10px;
+
+    line-height:1.3;
+
+    margin-bottom:1px;
+
+}
+
+
+
+.ds{
+
+    border-top:1px dashed black;
+
+    margin:4px 0;
+
+}
+
+
+
+.dd{
+
+    border-top:2px solid black;
+
+    margin:5px 0;
+
+}
+
+
+
+.row{
+
+    display:flex;
+
+    justify-content:space-between;
+
+    padding:1px 0;
+
+    font-size:11px;
+
+}
+
+
+
+.lbl{
+
+    font-weight:600;
+
+}
+
+
+
+.val{
+
+    text-align:right;
+
+}
+
+
+
+table{
+
+    width:100%;
+
+    border-collapse:collapse;
+
+}
+
+
+
+.ih th{
+
+
+    font-size:11px;
+
+    font-weight:800;
+
+    padding:4px 0;
+
+    border-bottom:1px dashed black;
+
+}
+
+
+
+.IN{
+
+
+    width:60%;
+
+    padding:3px 0;
+
+    word-break:break-word;
+
+}
+
+
+
+.IQ{
+
+
+    width:10%;
+
+    text-align:center;
+
+}
+
+
+
+.IA{
+
+
+    width:30%;
+
+    text-align:right;
+
+    font-weight:700;
+
+}
+
+
+
+.totrow{
+
+
+    display:flex;
+
+    justify-content:space-between;
+
+
+    font-size:16px;
+
+    font-weight:900;
+
+
+    padding:6px 0;
+
+
+    border-top:2px solid black;
+
+    border-bottom:2px solid black;
+
+}
+
+
+
+.foot{
+
+
+    text-align:center;
+
+
+    font-size:10px;
+
+
+    line-height:1.5;
+
+
+    padding-top:5px;
+
+}
+
+
+
+@media print{
+@page{margin:0;size:80mm auto}
+body{padding:0 5mm 0 0}
+}
+</style></head><body>
+<div class="sname">${escHtml(bill.shopName)}</div>
+${bill.shopAddress ? `<div class="addr">${escHtml(bill.shopAddress)}</div>` : ""}
+${bill.shopGstin ? `<div class="addr">GSTIN: ${escHtml(bill.shopGstin)}</div>` : ""}
+<div class="ds"></div>
+${drow("Bill No", escHtml(bill.billNo))}
+${drow("Date", dateStr)}
+${drow("Time", timeStr)}
+${drow("Customer", escHtml(bill.customerName || "Walk-in"))}
+${drow("Order Type", escHtml(fmtLabel(bill.billingType)))}
+${drow("Payment", escHtml(fmtLabel(bill.paymentMethod)))}
+<div class="ds"></div>
+<table class="ih">
+
+<thead>
+
+<tr>
+
+<th class="IN">
+ITEM
+</th>
+
+<th class="IQ">
+QTY
+</th>
+
+<th class="IA">
+AMOUNT
+</th>
+
+</tr>
+
+</thead>
+
+<tbody>
+
+${itemRows}
+
+</tbody>
+
+</table>
+<div class="ds"></div>
+${drow("Subtotal", `&#8377;${bill.subtotal.toFixed(2)}`)}
+${extraRows}
+<div class="ds"></div>
+<div class="totrow"><span>TOTAL</span><span>&#8377;${bill.grandTotal.toFixed(2)}</span></div>
+<div class="ds"></div>
+<div class="foot">
+
+Thank You For Visiting
+
+<br>
+
+Please Visit Again
+
+<br><br>
+
+Powered by DineInk POS
+
+</div>
+</body></html>`;
+
+  // Hidden iframe — works even after async/await (popup blocker doesn't apply)
+  const iframe = document.createElement("iframe");
+  iframe.style.cssText =
+    "position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none";
+  document.body.appendChild(iframe);
+  const doc = iframe.contentDocument ?? iframe.contentWindow?.document;
+  if (!doc) {
+    document.body.removeChild(iframe);
+    return;
+  }
+  doc.open();
+  doc.write(html);
+  doc.close();
+  iframe.contentWindow?.addEventListener("load", () => {
+    iframe.contentWindow?.print();
+    setTimeout(() => {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe);
+    }, 2000);
+  });
+}
+
 export async function printReceipt(bill: BillData): Promise<boolean> {
+  // Web / laptop: use browser print dialog — works with any USB printer
+  if (!Capacitor.isNativePlatform()) {
+    printReceiptBrowser(bill);
+    return true;
+  }
+
+  // Android native: ESC/POS direct print
   const config = getSavedPrinter();
   if (!config) return false;
 
   if (config.type === "wifi") {
     return printWifi(config.ip, config.port, bill);
   }
-
-  // Bluetooth: ESC/POS via native plugin — requires Android
-  if (!Capacitor.isNativePlatform()) return false;
   if (config.type === "bluetooth") {
-    const receipt = buildReceipt(bill);
-    return printBluetooth(config.address, receipt);
+    return printBluetooth(config.address, buildReceipt(bill));
   }
   return false;
 }
