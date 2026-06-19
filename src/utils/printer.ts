@@ -228,23 +228,20 @@ function buildReceipt(bill: BillData): string {
 
   /* ---------- DETAILS ---------- */
 
-  r += ln(`Bill No    : ${bill.billNo}`);
-  r += ln(`Date       : ${now.toLocaleDateString("en-IN")}`);
-
-  r += ln(
-    `Time       : ${now.toLocaleTimeString("en-IN", {
+  r += padded("Bill No", bill.billNo);
+  r += padded("Date", now.toLocaleDateString("en-IN"));
+  r += padded(
+    "Time",
+    now.toLocaleTimeString("en-IN", {
       hour: "2-digit",
       minute: "2-digit",
       second: "2-digit",
       hour12: true,
-    })}`,
+    }),
   );
-
-  r += ln(`Customer   : ${toAscii(bill.customerName || "Walk-in")}`);
-
-  r += ln(`Order Type : ${fmtLabel(bill.billingType)}`);
-
-  r += ln(`Payment    : ${fmtLabel(bill.paymentMethod)}`);
+  r += padded("Customer", toAscii(bill.customerName || "Walk-in"));
+  r += padded("Order Type", fmtLabel(bill.billingType));
+  r += padded("Payment", fmtLabel(bill.paymentMethod));
 
   r += divider();
 
@@ -509,7 +506,7 @@ function escHtml(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-function printReceiptBrowser(bill: BillData): any {
+function printReceiptBrowser(bill: BillData): void {
   const now = new Date();
   const dateStr = now.toLocaleDateString("en-IN");
   const timeStr = now.toLocaleTimeString("en-IN", {
@@ -670,7 +667,7 @@ export async function printReceipt(bill: BillData): Promise<boolean> {
     return printWifi(config.ip, config.port, bill);
   }
   if (config.type === "bluetooth") {
-    return printBluetooth(config.address, printReceiptBrowser(bill));
+    return printBluetooth(config.address, buildReceipt(bill));
   }
   return false;
 }
