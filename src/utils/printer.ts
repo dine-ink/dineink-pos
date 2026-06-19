@@ -209,7 +209,7 @@ function buildReceipt(bill: BillData): string {
   const now = new Date();
 
   r += CMD.init;
-  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln(toAscii(bill.shopName));
+  r += CMD.center + CMD.boldOn + CMD.doubleSize + ln(toAscii(bill.shopName).toUpperCase());
   r += CMD.init;
   if (bill.shopAddress) r += CMD.center + ln(toAscii(bill.shopAddress));
   if (bill.shopGstin) r += CMD.center + ln("GSTIN: " + bill.shopGstin);
@@ -255,7 +255,9 @@ function buildReceipt(bill: BillData): string {
   r +=
     CMD.boldOn + padded("TOTAL", `Rs.${bill.grandTotal.toFixed(2)}`) + CMD.init;
   r += divider();
-  r += CMD.center + ln("Thank You Visit Again!");
+  r += CMD.center + ln("Thank You For Visiting");
+  r += CMD.center + ln("Please Visit Again");
+  r += CMD.lf;
   r += CMD.center + ln("Powered by DineInk POS");
   r += CMD.lf + CMD.lf + CMD.lf + CMD.lf;
   r += CMD.cut;
