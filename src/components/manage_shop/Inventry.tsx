@@ -25,12 +25,14 @@ export default function Inventory() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [ingredients, setIngredients] = useState<any[]>([]);
   // const [users, setUsers] = useState<any[]>([]);
-  // const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
 
   const [search, setSearch] = useState("");
 
   const [editRowId, setEditRowId] = useState<number | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   const handleDelete = async (inventoryId: number) => {
     try {
@@ -40,24 +42,30 @@ export default function Inventory() {
         return;
       }
 
+      setLoading(true);
+
       await deleteInventoryAdjustment(inventoryId);
 
       await fetchData();
     } catch (error) {
       console.log(error);
+    } finally {
+      setLoading(false);
     }
   };
   const handleSave = async (item: any) => {
-    try {
-      if (!item.ingredientId) {
-        alert("Please select ingredient");
-        return;
-      }
+    if (!item.ingredientId) {
+      alert("Please select ingredient");
+      return;
+    }
 
-      if (!item.quantity) {
-        alert("Please enter quantity");
-        return;
-      }
+    if (!item.quantity) {
+      alert("Please enter quantity");
+      return;
+    }
+
+    try {
+      setLoading(true);
 
       if (item.isNew) {
         await createInventoryAdjustment({
@@ -94,9 +102,13 @@ export default function Inventory() {
       await fetchData();
     } catch (error) {
       console.log(error);
+    } finally {
+      setLoading(false);
     }
   };
   const filteredInventory = useMemo(() => {
+    setCurrentPage(1);
+
     return inventory.filter((item: any) => {
       const ingredientName = item.ingredient?.name?.toLowerCase() || "";
 
@@ -116,6 +128,13 @@ export default function Inventory() {
       );
     });
   }, [inventory, search]);
+
+  const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
+
+  const paginatedItems = filteredInventory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage,
+  );
 
   const handleChange = (id: number, field: string, value: any) => {
     setInventory((prev: any) =>
@@ -155,7 +174,7 @@ export default function Inventory() {
   };
   const fetchData = async () => {
     try {
-      // setLoading(true);
+      setLoading(true);
 
       const [inventoryRes, ingredientRes] = await Promise.all([
         getInventoryAdjustments(user?.branchId),
@@ -165,12 +184,10 @@ export default function Inventory() {
       setInventory(inventoryRes.data || []);
 
       setIngredients(ingredientRes.data || []);
-
-      // setUsers(usersRes.data || []);
     } catch (error) {
       console.log(error);
     } finally {
-      // setLoading(false);
+      setLoading(false);
     }
   };
 
@@ -253,7 +270,7 @@ export default function Inventory() {
 
               {/* TABLE BODY */}
               <tbody>
-                {filteredInventory.map((item: any) => {
+                {paginatedItems.map((item: any) => {
                   const isEditing = editRowId === item.id;
 
                   return (
@@ -367,7 +384,8 @@ export default function Inventory() {
                             <>
                               <button
                                 onClick={() => handleSave(item)}
-                                className="h-8 px-3 rounded-lg bg-green-500 text-white"
+                                disabled={loading}
+                                className="h-8 px-3 rounded-lg bg-green-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 Save
                               </button>
@@ -400,7 +418,8 @@ export default function Inventory() {
 
                               <button
                                 onClick={() => handleDelete(item.id)}
-                                className="h-8 w-8 rounded-lg border border-red-500 text-red-600 flex items-center justify-center"
+                                disabled={loading}
+                                className="h-8 w-8 rounded-lg border border-red-500 text-red-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -418,21 +437,30 @@ export default function Inventory() {
           {/* FOOTER */}
           <div className="p-6 border-t border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
             <p className="text-[#15163A] text-sm font-medium">
-              Showing 1 to {filteredInventory.length} of {inventory.length}{" "}
-              entries
+              Showing {filteredInventory.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{" "}
+              {Math.min(currentPage * itemsPerPage, filteredInventory.length)} of{" "}
+              {filteredInventory.length} entries
             </p>
 
             {/* PAGINATION */}
             <div className="flex items-center gap-3">
-              <button className="h-10 w-10 rounded-xl bg-gray-100 text-gray-500 text-xl">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-10 w-10 rounded-xl bg-gray-100 text-gray-500 text-xl disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 ‹
               </button>
 
               <button className="h-10 w-10 rounded-xl bg-red-500 text-white text-sm font-bold">
-                1
+                {currentPage}
               </button>
 
-              <button className="h-10 w-10 rounded-xl bg-gray-100 text-gray-500 text-xl">
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="h-10 w-10 rounded-xl bg-gray-100 text-gray-500 text-xl disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 ›
               </button>
             </div>

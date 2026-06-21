@@ -147,6 +147,23 @@ export default function DineIn({
     }
   };
 
+  // Effective total for billing — sums non-cancelled items across all committed KOTs
+  const effectiveBillTotal = tableOrders.reduce((sum, order) => {
+    const orderItems = order.batches?.flatMap((b: any) => b.items) ?? [];
+    const active = orderItems
+      .filter((i: any) => i.status !== "CANCELLED")
+      .reduce((s: number, i: any) => s + (i.total ?? i.price * i.quantity), 0);
+    return sum + active;
+  }, 0);
+
+  // Navigate to billing — auto-save any unsaved cart items first
+  const handleGoToBilling = async () => {
+    if (cartItems.length > 0) {
+      await handleSaveOrder();
+    }
+    setStep("CUSTOMER");
+  };
+
   // Close all running orders for this table and generate the bill
   const handleGenerateBill = async (billingData: any) => {
     if (!selectedTable) return;
@@ -503,13 +520,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     Occupancy
                   </p>
                   <h2 className="mt-1 text-3xl font-black">
-                    {tables.length > 0
-                      ? Math.round((occupiedCount / tables.length) * 100)
+                    {nonTempTables.length > 0
+                      ? Math.round((occupiedCount / nonTempTables.length) * 100)
                       : 0}
                     %
                   </h2>
                   <p className="text-[10px] text-red-100 mt-0.5">
-                    {occupiedCount} of {tables.length} tables
+                    {occupiedCount} of {nonTempTables.length} tables
                   </p>
                 </div>
 
@@ -525,7 +542,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   </div>
                   <div className="space-y-1.5">
                     {tables
-                      .filter((t) => t.status === "OCCUPIED")
+                      .filter((t) => !t.isTemporary && getTableColorState(t.id) !== "available")
                       .map((table) => (
                         <div
                           key={table.id}
@@ -939,7 +956,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       </button>
                       {canCheckout && tableOrders.length > 0 && (
                         <button
-                          onClick={() => setStep("CUSTOMER")}
+                          onClick={handleGoToBilling}
                           className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"
                         >
                           Bill
@@ -1122,14 +1139,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   </div>
                   {canCheckout && tableOrders.length > 0 && (
                     <button
-                      onClick={() => setStep("CUSTOMER")}
+                      onClick={handleGoToBilling}
                       className="w-full rounded-xl bg-emerald-500 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 active:scale-[0.99]"
                     >
-                      Generate Bill · ₹
-                      {tableOrders.reduce(
-                        (s, o) => s + (o.totalAmount || 0),
-                        0,
-                      )}
+                      Generate Bill · ₹{effectiveBillTotal}
                     </button>
                   )}
                 </div>
@@ -1163,7 +1176,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   </div>
                   {canCheckout && tableOrders.length > 0 && (
                     <button
-                      onClick={() => setStep("CUSTOMER")}
+                      onClick={handleGoToBilling}
                       className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600"
                     >
                       Generate Bill
@@ -1432,7 +1445,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     </div>
                     {canCheckout && tableOrders.length > 0 && (
                       <button
-                        onClick={() => setStep("CUSTOMER")}
+                        onClick={handleGoToBilling}
                         className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-600"
                       >
                         Generate Bill
@@ -1451,10 +1464,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               setCustomerAddress={setCustomerAddress}
               customerPhone={customerPhone}
               setCustomerPhone={setCustomerPhone}
-              grand_Total={tableOrders.reduce(
-                (s, o) => s + (o.totalAmount || 0),
-                0,
-              )}
+              grand_Total={effectiveBillTotal}
               billingType="DINE_IN"
               setStep={setStep}
               onConfirm={handleGenerateBill}

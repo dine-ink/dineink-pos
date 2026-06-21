@@ -48,7 +48,7 @@ export default function OrderHistory() {
   };
 
   useEffect(() => {
-    if (user?.restaurantId) fetchOrders();
+    if (user?.restaurantId && user?.branchId) fetchOrders();
   }, [user?.restaurantId, user?.branchId]);
 
   const filteredOrders = useMemo(() => {
@@ -67,7 +67,9 @@ export default function OrderHistory() {
     try {
       const res = await api.post(`/running-orders/closeRunningOrder`, {
         runningOrderId: order.id,
-        customerName: order.customer,
+        customerName: typeof order.customer === "object" && order.customer !== null
+          ? (order.customer as any)?.name || ""
+          : (order.customer as string) || "",
         customerPhone: order.customerPhone,
         paymentMethod: order.paymentMethod || "CASH",
         orderType: order.orderType,

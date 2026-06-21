@@ -36,7 +36,7 @@ export default function CashSession() {
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [user?.branchId]);
 
   const handleOpen = async () => {
     if (!user || !openingCash) return;
@@ -63,10 +63,12 @@ export default function CashSession() {
     if (!openSession || !actualCash || !user) return;
     try {
       setCloseLoading(true);
+      // closingCash = expected cash (opening cash + cash received during the session)
+      const expectedCash = Number(openSession?.openingCash || 0) + Number(openSession?.totalCash || 0);
       await closeCashSession(openSession.id, {
         closedById:  user.id,
         actualCash:  Number(actualCash),
-        closingCash: Number(actualCash),
+        closingCash: expectedCash,
         notes:       closeNotes || undefined,
       });
       setActualCash("");

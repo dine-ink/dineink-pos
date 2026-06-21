@@ -3,7 +3,7 @@ import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
 import { useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { saveRunningOrder } from "@/services/runningOrderService";
+import { saveRunningOrder, closeRunningOrder } from "@/services/runningOrderService";
 import { PauseCircle, Play } from "lucide-react";
 import { printReceipt } from "@/utils/printer";
 
@@ -135,7 +135,8 @@ export default function NormalBilling({
         quantity: cart[item.id],
         price: item.price,
       }));
-      const response = await saveRunningOrder({
+      // Step 1: Create the running order (sends to kitchen)
+      const saveResponse = await saveRunningOrder({
         restaurantId: user.restaurantId,
         branchId: user.branchId,
         createdById: user.id,
@@ -143,7 +144,22 @@ export default function NormalBilling({
         customerName,
         customerPhone,
         customerAddress,
+        items,
+      });
+      if (!saveResponse.success) return;
+
+      const runningOrderId = saveResponse.data?.id;
+
+      // Step 2: Immediately close it and create the Bill record
+      const response = await closeRunningOrder({
+        runningOrderId,
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+        customerName,
+        customerPhone,
+        customerAddress,
         paymentMethod: billingData.paymentMethod,
+        orderType: billingType,
         subtotal: grandTotal,
         discountAmount: billingData.discountAmount,
         packingCharge: billingData.packingCharge,
@@ -152,10 +168,9 @@ export default function NormalBilling({
         cgst: billingData.cgst,
         sgst: billingData.sgst,
         finalAmount: billingData.grandTotal,
-        items,
       });
       if (response.success) {
-        const billNo = response.data?.billNumber || response.data?.id || `BILL-${Date.now()}`;
+        const billNo = response.data?.billNo || response.data?.id || `BILL-${Date.now()}`;
         // Silent print — fires and forgets; UI resets regardless of print outcome
         printReceipt({
           shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
