@@ -1,7 +1,7 @@
 import MenuSection from "@/components/billing/MenuSection";
 import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { saveRunningOrder, closeRunningOrder } from "@/services/runningOrderService";
 import { PauseCircle, Play } from "lucide-react";
@@ -43,9 +43,25 @@ export default function NormalBilling({
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
-  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>([]);
+  const HELD_STORAGE_KEY = `held_orders_${billingType}`;
+  const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem(HELD_STORAGE_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [submitting, setSubmitting] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(HELD_STORAGE_KEY, JSON.stringify(heldOrders));
+    } catch {
+      // localStorage unavailable — hold is still functional in memory
+    }
+  }, [heldOrders]);
 
   const holdCurrentOrder = () => {
     if (!Object.keys(cart).length) return;

@@ -56,3 +56,23 @@ export const rejectItemCancel = async (itemId: number) => {
   const response = await api.patch(`/running-orders/items/${itemId}/reject-cancel`);
   return response.data;
 };
+
+export const holdRunningOrder = async (orderId: number) => {
+  const response = await api.patch(`/running-orders/${orderId}/hold`);
+  return response.data;
+};
+
+export const resumeRunningOrder = async (orderId: number) => {
+  const response = await api.patch(`/running-orders/${orderId}/resume`);
+  return response.data;
+};
+
+export const discardRunningOrder = async (orderId: number) => {
+  const response = await api.delete(`/running-orders/${orderId}/discard`);
+  return response.data;
+};
+
+export const cancelBill = async (billId: number) => {
+  const response = await api.patch(`/bills/${billId}/cancel`);
+  return response.data;
+};
