@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  User, Phone, MapPin, Wallet, Percent, ShoppingBag, Info, ArrowLeft, CheckCircle,
+  User, Phone, MapPin, Wallet, Percent, ShoppingBag, Info, ArrowLeft, CheckCircle, Printer,
 } from "lucide-react";
 
 type Props = {
@@ -255,28 +255,46 @@ export default function CustomerSection({
               </div>
 
               {/* CONFIRM — desktop */}
-              <button
-                onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge })}
-                disabled={loading}
-                className="hidden xl:flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <CheckCircle className="h-4 w-4" />
-                {loading ? "Placing Order..." : "Confirm Order"}
-              </button>
+              <div className="hidden xl:flex gap-2">
+                <button
+                  onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
+                  disabled={loading}
+                  className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 transition hover:bg-gray-50 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  {loading ? "..." : "Confirm"}
+                </button>
+                <button
+                  onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
+                  disabled={loading}
+                  className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <Printer className="h-4 w-4" />
+                  {loading ? "Placing..." : "Confirm + Print"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
       {/* MOBILE CONFIRM */}
-      <div className="xl:hidden shrink-0 border-t border-gray-100 bg-white p-2.5">
+      <div className="xl:hidden shrink-0 border-t border-gray-100 bg-white p-2.5 flex gap-2">
         <button
-          onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge })}
+          onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
           disabled={loading}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <CheckCircle className="h-4 w-4" />
-          {loading ? "Placing Order..." : `Confirm Order · ₹${grandTotal.toFixed(0)}`}
+          {loading ? "..." : "Confirm"}
+        </button>
+        <button
+          onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
+          disabled={loading}
+          className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <Printer className="h-4 w-4" />
+          {loading ? "Placing..." : `Print · ₹${grandTotal.toFixed(0)}`}
         </button>
       </div>
     </div>

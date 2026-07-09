@@ -3,7 +3,7 @@ import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
 import { useMemo, useState, useEffect } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { saveRunningOrder, closeRunningOrder } from "@/services/runningOrderService";
+import { saveRunningOrder } from "@/services/runningOrderService";
 import { PauseCircle, Play } from "lucide-react";
 import { printReceipt } from "@/utils/printer";
 
@@ -151,7 +151,6 @@ export default function NormalBilling({
         quantity: cart[item.id],
         price: item.price,
       }));
-      // Step 1: Create the running order (sends to kitchen)
       const saveResponse = await saveRunningOrder({
         restaurantId: user.restaurantId,
         branchId: user.branchId,
@@ -164,53 +163,29 @@ export default function NormalBilling({
       });
       if (!saveResponse.success) return;
 
-      const runningOrderId = saveResponse.data?.id;
-
-      // Step 2: Immediately close it and create the Bill record
-      const response = await closeRunningOrder({
-        runningOrderId,
-        restaurantId: user.restaurantId,
-        branchId: user.branchId,
+      if (billingData.shouldPrint) printReceipt({
+        shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
+        shopAddress: branchData?.address || user?.branch?.address,
+        shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
+        billNo: `KOT-${saveResponse.data?.id ?? Date.now()}`,
         customerName,
-        customerPhone,
-        customerAddress,
+        billingType,
         paymentMethod: billingData.paymentMethod,
-        orderType: billingType,
+        items,
         subtotal: grandTotal,
         discountAmount: billingData.discountAmount,
-        packingCharge: billingData.packingCharge,
-        serviceCharge: billingData.serviceChargeAmount,
-        gstAmount: billingData.gstAmount,
         cgst: billingData.cgst,
         sgst: billingData.sgst,
-        finalAmount: billingData.grandTotal,
+        serviceChargeAmount: billingData.serviceChargeAmount,
+        packingCharge: billingData.packingCharge,
+        grandTotal: billingData.grandTotal,
       });
-      if (response.success) {
-        const billNo = response.data?.billNo || response.data?.id || `BILL-${Date.now()}`;
-        // Silent print — fires and forgets; UI resets regardless of print outcome
-        printReceipt({
-          shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
-          shopAddress: branchData?.address || user?.branch?.address,
-          shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
-          billNo,
-          customerName,
-          billingType,
-          paymentMethod: billingData.paymentMethod,
-          items,
-          subtotal: grandTotal,
-          discountAmount: billingData.discountAmount,
-          cgst: billingData.cgst,
-          sgst: billingData.sgst,
-          serviceChargeAmount: billingData.serviceChargeAmount,
-          packingCharge: billingData.packingCharge,
-          grandTotal: billingData.grandTotal,
-        });
-        setCart({});
-        setCustomerName("");
-        setCustomerPhone("");
-        setCustomerAddress("");
-        setStep("MENU");
-      }
+
+      setCart({});
+      setCustomerName("");
+      setCustomerPhone("");
+      setCustomerAddress("");
+      setStep("MENU");
     } finally {
       setSubmitting(false);
     }
