@@ -13,7 +13,14 @@ import PageLoader from "@/components/ui/PageLoader";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type OrderItem = { id: number; name: string; qty: number; status: string; notes?: string | null };
+type OrderItem = {
+  id: number;
+  name: string;
+  qty: number;
+  status: string;
+  notes?: string | null;
+  addOns?: { name: string; price: number }[];
+};
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -47,6 +54,7 @@ function flattenItems(order: any, skipBatchIds?: Set<number>): OrderItem[] {
           qty:    item.quantity ?? 1,
           status: item.status ?? "PENDING",
           notes:  item.notes,
+          addOns: item.addOns,
         });
       });
     });
@@ -58,6 +66,7 @@ function flattenItems(order: any, skipBatchIds?: Set<number>): OrderItem[] {
         qty:    item.quantity ?? 1,
         status: item.status ?? "PENDING",
         notes:  item.notes,
+        addOns: item.addOns,
       });
     });
   }
@@ -202,6 +211,11 @@ function OrderCard({
                   ×{item.qty}
                 </span>
               </div>
+              {(item.addOns?.length || 0) > 0 && (
+                <p className="pl-6 text-[10px] font-bold text-violet-600">
+                  + {item.addOns!.map((a) => a.name).join(", ")}
+                </p>
+              )}
               {item.notes && (
                 <p className="pl-6 text-[10px] font-bold italic text-amber-600">
                   📝 {item.notes}

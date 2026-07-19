@@ -12,6 +12,7 @@ type Props = {
   onHold?: () => void;
   notes?: Record<number, string>;
   setNote?: (id: number, note: string) => void;
+  addOns?: Record<number, { name: string; price: number }[]>;
 };
 
 export default function CartSection({
@@ -25,7 +26,12 @@ export default function CartSection({
   onHold,
   notes = {},
   setNote,
+  addOns = {},
 }: Props) {
+  const lineTotal = (item: any) => {
+    const addOnUnitTotal = (addOns[item.id] || []).reduce((s, a) => s + a.price, 0);
+    return (item.price + addOnUnitTotal) * activeCart[item.id];
+  };
   const { user } = useAppSelector((state) => state.auth);
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -123,10 +129,15 @@ export default function CartSection({
                     {/* TOTAL */}
                     <div className="shrink-0 text-right min-w-[48px]">
                       <p className="text-sm font-black text-red-600">
-                        ₹{item.price * activeCart[item.id]}
+                        ₹{lineTotal(item)}
                       </p>
                     </div>
                   </div>
+                  {(addOns[item.id]?.length || 0) > 0 && (
+                    <p className="mt-1 text-[10px] font-semibold text-violet-600">
+                      + {addOns[item.id].map((a) => a.name).join(", ")}
+                    </p>
+                  )}
                   {setNote && (
                     <input
                       value={notes[item.id] || ""}

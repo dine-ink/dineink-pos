@@ -187,7 +187,13 @@ export type BillData = {
   customerName?: string;
   billingType: string;
   paymentMethod: string;
-  items: Array<{ itemName: string; quantity: number; price: number; notes?: string }>;
+  items: Array<{
+    itemName: string;
+    quantity: number;
+    price: number;
+    notes?: string;
+    addOns?: Array<{ name: string; price: number }>;
+  }>;
   subtotal: number;
   discountAmount: number;
   cgst: number;
@@ -256,6 +262,9 @@ function buildReceipt(bill: BillData): string {
   r += divider();
 
   for (const item of bill.items) {
+    const addOnTotal = (item.addOns || []).reduce((s, a) => s + a.price, 0);
+    const unitPrice = item.price + addOnTotal;
+
     const name = toAscii(item.itemName)
       .substring(0, IC)
 
@@ -263,9 +272,13 @@ function buildReceipt(bill: BillData): string {
 
     const qty = String(item.quantity).padStart(QC);
 
-    const amt = `Rs.${(item.price * item.quantity).toFixed(2)}`.padStart(AC);
+    const amt = `Rs.${(unitPrice * item.quantity).toFixed(2)}`.padStart(AC);
 
     r += ln(name + qty + amt);
+
+    for (const addOn of item.addOns || []) {
+      r += ln(`  + ${toAscii(addOn.name)} (+Rs.${addOn.price})`.substring(0, IC + QC + AC));
+    }
 
     if (item.notes?.trim()) {
       r += ln(`  * ${toAscii(item.notes).substring(0, IC + QC + AC - 4)}`);
@@ -533,17 +546,27 @@ function printReceiptBrowser(bill: BillData): void {
     `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`;
 
   const itemRows = bill.items
-    .map(
-      (item) =>
+    .map((item) => {
+      const addOnTotal = (item.addOns || []).reduce((s, a) => s + a.price, 0);
+      const unitPrice = item.price + addOnTotal;
+      const addOnRows = (item.addOns || [])
+        .map(
+          (a) =>
+            `<tr><td class="INote" colspan="2">&#8226; ${escHtml(a.name)}</td><td class="IA">+&#8377;${a.price}</td></tr>`,
+        )
+        .join("");
+      return (
         `<tr>` +
         `<td class="IN">${escHtml(item.itemName)}</td>` +
         `<td class="IQ">${item.quantity}</td>` +
-        `<td class="IA">&#8377;${(item.price * item.quantity).toFixed(2)}</td>` +
+        `<td class="IA">&#8377;${(unitPrice * item.quantity).toFixed(2)}</td>` +
         `</tr>` +
+        addOnRows +
         (item.notes?.trim()
           ? `<tr><td class="INote" colspan="3">&#128221; ${escHtml(item.notes)}</td></tr>`
-          : ""),
-    )
+          : "")
+      );
+    })
     .join("");
 
   const extraRows = [

@@ -9,6 +9,7 @@ import {
 } from "@/services/runningOrderService";
 import MenuSection from "@/components/billing/MenuSection";
 import CustomerSection from "@/components/billing/CustomerSection";
+import AddOnSelectorModal from "@/components/billing/AddOnSelectorModal";
 import {
   createRestaurantTable,
   deleteRestaurantTable,
@@ -29,6 +30,7 @@ type Props = {
   loading: boolean;
   branchData: any;
   runningOrders: any[];
+  addOnMap: Record<number, any[]>;
 };
 
 export default function DineIn({
@@ -44,6 +46,7 @@ export default function DineIn({
   loading,
   branchData,
   runningOrders,
+  addOnMap,
 }: Props) {
   const [selectedCategory, setSelectedCategory] = useState("Best Sellers");
   const [customerName, setCustomerName] = useState("");
@@ -51,6 +54,8 @@ export default function DineIn({
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<any>({});
   const [cartNotes, setCartNotes] = useState<Record<number, string>>({}); // itemId → special instructions
+  const [cartAddOns, setCartAddOns] = useState<Record<number, { name: string; price: number }[]>>({});
+  const [addOnModal, setAddOnModal] = useState<any>(null); // the product being added, while its add-on selector is open
   const [tableOrders, setTableOrders] = useState<any[]>([]); // all KOTs for selected table
   const [submitting, setSubmitting] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
@@ -81,18 +86,44 @@ export default function DineIn({
             selectedCategory,
         );
 
-  const increaseQty = (id: number) =>
+  // Add-ons apply once per cart line (not per unit) — the selector only
+  // opens on the FIRST unit of an item that has attached groups. Bumping
+  // the quantity of an item already in the cart just increments as before.
+  const bumpCart = (id: number) =>
     setCart((prev: any) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+
+  const increaseQty = (id: number) => {
+    const alreadyInCart = !!cart[id];
+    const groups = addOnMap[id];
+    if (!alreadyInCart && groups?.length) {
+      const product = allMenuItems.find((p: any) => p.id === id);
+      setAddOnModal(product || { id, name: "Item" });
+      return;
+    }
+    bumpCart(id);
+  };
 
   const decreaseQty = (id: number) =>
     setCart((prev: any) => {
       if ((prev[id] || 0) <= 1) {
         const u = { ...prev };
         delete u[id];
+        setCartAddOns((p) => {
+          const next = { ...p };
+          delete next[id];
+          return next;
+        });
         return u;
       }
       return { ...prev, [id]: prev[id] - 1 };
     });
+
+  const confirmAddOns = (selected: { name: string; price: number }[]) => {
+    if (!addOnModal) return;
+    if (selected.length) setCartAddOns((prev) => ({ ...prev, [addOnModal.id]: selected }));
+    bumpCart(addOnModal.id);
+    setAddOnModal(null);
+  };
 
   const totalItems: number = Object.values(cart).reduce(
     (acc: any, qty: any) => acc + qty,
@@ -104,10 +135,11 @@ export default function DineIn({
     ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id)),
   ];
   const cartItems = allMenuItems.filter((p) => cart[p.id]);
-  const grandTotal = cartItems.reduce(
-    (acc, item) => acc + item.price * cart[item.id],
-    0,
-  );
+  const addOnUnitTotal = (itemId: number) =>
+    (cartAddOns[itemId] || []).reduce((s, a) => s + a.price, 0);
+  const lineTotalFor = (item: any) =>
+    (item.price + addOnUnitTotal(item.id)) * cart[item.id];
+  const grandTotal = cartItems.reduce((acc, item) => acc + lineTotalFor(item), 0);
 
   // Load all KOTs for this table — cart stays empty (new order starts fresh)
   const fetchExistingOrder = async (tableId: number) => {
@@ -121,6 +153,7 @@ export default function DineIn({
       setTableOrders(orders);
       setCart({});
                           setCartNotes({});
+                          setCartAddOns({});
     } catch {
       /* silent */
     }
@@ -137,6 +170,7 @@ export default function DineIn({
         quantity: cart[item.id],
         price: item.price,
         notes: cartNotes[item.id]?.trim() || undefined,
+        addOns: cartAddOns[item.id] || [],
       }));
       const response = await saveRunningOrder({
         restaurantId: user.restaurantId,
@@ -149,6 +183,7 @@ export default function DineIn({
       if (response.success) {
         setCart({});
                           setCartNotes({});
+                          setCartAddOns({});
         await fetchExistingOrder(selectedTable.id); // refresh order history
         await fetchData();
       }
@@ -200,6 +235,7 @@ export default function DineIn({
       if (response.success) {
         setCart({});
                           setCartNotes({});
+                          setCartAddOns({});
         setTableOrders([]);
         setCustomerName("");
         setCustomerPhone("");
@@ -474,6 +510,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         else {
                           setCart({});
                           setCartNotes({});
+                          setCartAddOns({});
                           setTableOrders([]);
                         }
                       }}
@@ -1108,7 +1145,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               </p>
                             </div>
                             <p className="ml-2 shrink-0 text-xs font-black text-red-600">
-                              ₹{item.price * cart[item.id]}
+                              ₹{lineTotalFor(item)}
                             </p>
                           </div>
                         ))}
@@ -1408,9 +1445,14 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               </button>
                             </div>
                             <p className="shrink-0 text-xs font-black text-red-600">
-                              ₹{item.price * cart[item.id]}
+                              ₹{lineTotalFor(item)}
                             </p>
                           </div>
+                          {(cartAddOns[item.id]?.length || 0) > 0 && (
+                            <p className="mt-1 text-[10px] font-semibold text-violet-600">
+                              + {cartAddOns[item.id].map((a) => a.name).join(", ")}
+                            </p>
+                          )}
                           <input
                             value={cartNotes[item.id] || ""}
                             onChange={(e) =>
@@ -1502,6 +1544,18 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
             />
           )}
         </div>
+      )}
+
+      {addOnModal && (
+        <AddOnSelectorModal
+          itemName={addOnModal.name}
+          groups={addOnMap[addOnModal.id] || []}
+          onConfirm={confirmAddOns}
+          onCancel={() => {
+            bumpCart(addOnModal.id);
+            setAddOnModal(null);
+          }}
+        />
       )}
     </div>
   );

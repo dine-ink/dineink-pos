@@ -1,6 +1,7 @@
 import MenuSection from "@/components/billing/MenuSection";
 import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
+import AddOnSelectorModal from "@/components/billing/AddOnSelectorModal";
 import { useMemo, useState, useEffect } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { saveRunningOrder } from "@/services/runningOrderService";
@@ -11,6 +12,7 @@ type HeldOrder = {
   id: string;
   cart: Record<number, number>;
   cartNotes: Record<number, string>;
+  cartAddOns: Record<number, { name: string; price: number }[]>;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -28,6 +30,7 @@ type Props = {
   fetchData: any;
   loading: boolean;
   branchData: any;
+  addOnMap: Record<number, any[]>;
 };
 
 export default function NormalBilling({
@@ -38,6 +41,7 @@ export default function NormalBilling({
   categories,
   topSellingItems,
   branchData,
+  addOnMap,
 }: Props) {
   const [selectedCategory, setSelectedCategory] = useState("Best Sellers");
   const [customerName, setCustomerName] = useState("");
@@ -45,6 +49,8 @@ export default function NormalBilling({
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
   const [cartNotes, setCartNotes] = useState<Record<number, string>>({});
+  const [cartAddOns, setCartAddOns] = useState<Record<number, { name: string; price: number }[]>>({});
+  const [addOnModal, setAddOnModal] = useState<any>(null);
   const HELD_STORAGE_KEY = `held_orders_${billingType}`;
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => {
     try {
@@ -72,6 +78,7 @@ export default function NormalBilling({
       id: Date.now().toString(),
       cart,
       cartNotes,
+      cartAddOns,
       customerName,
       customerPhone,
       customerAddress,
@@ -81,6 +88,7 @@ export default function NormalBilling({
     setHeldOrders((prev) => [...prev, newHeld]);
     setCart({});
     setCartNotes({});
+    setCartAddOns({});
     setCustomerName("");
     setCustomerPhone("");
     setCustomerAddress("");
@@ -95,6 +103,7 @@ export default function NormalBilling({
         id: Date.now().toString(),
         cart,
         cartNotes,
+        cartAddOns,
         customerName,
         customerPhone,
         customerAddress,
@@ -107,6 +116,7 @@ export default function NormalBilling({
     }
     setCart(held.cart);
     setCartNotes(held.cartNotes || {});
+    setCartAddOns(held.cartAddOns || {});
     setCustomerName(held.customerName);
     setCustomerPhone(held.customerPhone);
     setCustomerAddress(held.customerAddress);
@@ -125,26 +135,53 @@ export default function NormalBilling({
             selectedCategory,
         );
 
-  const increaseQty = (id: number) =>
+  // Add-ons apply once per cart line (not per unit) — the selector only
+  // opens on the FIRST unit of an item that has attached groups.
+  const bumpCart = (id: number) =>
     setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+
+  const increaseQty = (id: number) => {
+    const alreadyInCart = !!cart[id];
+    const groups = addOnMap[id];
+    if (!alreadyInCart && groups?.length) {
+      const product = allMenuItems.find((p: any) => p.id === id);
+      setAddOnModal(product || { id, name: "Item" });
+      return;
+    }
+    bumpCart(id);
+  };
 
   const decreaseQty = (id: number) =>
     setCart((prev) => {
       if ((prev[id] || 0) <= 1) {
         const u = { ...prev };
         delete u[id];
+        setCartAddOns((p) => {
+          const next = { ...p };
+          delete next[id];
+          return next;
+        });
         return u;
       }
       return { ...prev, [id]: prev[id] - 1 };
     });
 
+  const confirmAddOns = (selected: { name: string; price: number }[]) => {
+    if (!addOnModal) return;
+    if (selected.length) setCartAddOns((prev) => ({ ...prev, [addOnModal.id]: selected }));
+    bumpCart(addOnModal.id);
+    setAddOnModal(null);
+  };
+
   const totalItems = Object.values(cart).reduce((acc, qty) => acc + qty, 0);
   // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
   const allMenuItems = [...products, ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id))];
   const cartItems = allMenuItems.filter((p) => cart[p.id]);
+  const addOnUnitTotal = (itemId: number) =>
+    (cartAddOns[itemId] || []).reduce((s, a) => s + a.price, 0);
   const grandTotal = useMemo(
-    () => cartItems.reduce((acc, item) => acc + item.price * cart[item.id], 0),
-    [cartItems, cart],
+    () => cartItems.reduce((acc, item) => acc + (item.price + addOnUnitTotal(item.id)) * cart[item.id], 0),
+    [cartItems, cart, cartAddOns],
   );
 
   const handleConfirmOrder = async (billingData: any) => {
@@ -157,6 +194,7 @@ export default function NormalBilling({
         quantity: cart[item.id],
         price: item.price,
         notes: cartNotes[item.id]?.trim() || undefined,
+        addOns: cartAddOns[item.id] || [],
       }));
       const saveResponse = await saveRunningOrder({
         restaurantId: user.restaurantId,
@@ -190,6 +228,7 @@ export default function NormalBilling({
 
       setCart({});
       setCartNotes({});
+      setCartAddOns({});
       setCustomerName("");
       setCustomerPhone("");
       setCustomerAddress("");
@@ -373,6 +412,7 @@ export default function NormalBilling({
           onHold={holdCurrentOrder}
           notes={cartNotes}
           setNote={(id, note) => setCartNotes((prev) => ({ ...prev, [id]: note }))}
+          addOns={cartAddOns}
         />
       )}
       {step === "CUSTOMER" && (
@@ -389,6 +429,18 @@ export default function NormalBilling({
           onConfirm={handleConfirmOrder}
           billing={branchData.billing}
           loading={submitting}
+        />
+      )}
+
+      {addOnModal && (
+        <AddOnSelectorModal
+          itemName={addOnModal.name}
+          groups={addOnMap[addOnModal.id] || []}
+          onConfirm={confirmAddOns}
+          onCancel={() => {
+            bumpCart(addOnModal.id);
+            setAddOnModal(null);
+          }}
         />
       )}
     </div>

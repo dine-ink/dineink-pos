@@ -5,6 +5,7 @@ import DineIn from "./DineIn_Billing";
 import NormalBilling from "./Quick_Takeaway_Billing";
 import { getBranchDetails } from "@/services/branchService";
 import { getAllRunningOrders } from "@/services/runningOrderService";
+import { getRestaurantAddOnAttachments } from "@/services/addonService";
 import PageLoader from "@/components/ui/PageLoader";
 import PrinterSetupModal from "@/components/PrinterSetupModal";
 import { getSavedPrinter } from "@/utils/printer";
@@ -24,17 +25,22 @@ export default function BillingPage() {
   const [topSellingItems, setTopSellingItems] = useState<any[]>([]);
   const [branchData, setBranchData] = useState<any>(null);
   const [runningOrders, setRunningOrders] = useState<any[]>([]);
+  const [addOnMap, setAddOnMap] = useState<Record<number, any[]>>({});
 
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const [data, ordersData] = await Promise.all([
+      const [data, ordersData, addOnData] = await Promise.all([
         getBranchDetails(user?.branchId),
         user?.restaurantId && user?.branchId
           ? getAllRunningOrders(user.restaurantId, user.branchId)
           : Promise.resolve({ data: [] }),
+        user?.restaurantId
+          ? getRestaurantAddOnAttachments(user.restaurantId)
+          : Promise.resolve({ data: {} }),
       ]);
       setBranchData(data.data);
+      setAddOnMap(addOnData.data || {});
       const menuItems: any[] = data.data.restaurant.menuItems || [];
       setProducts(menuItems);
       setTables(data.data.tables || []);
@@ -131,6 +137,7 @@ export default function BillingPage() {
             branchData={branchData}
             billingType={billingType}
             runningOrders={runningOrders}
+            addOnMap={addOnMap}
           />
         ) : (billingType === "TAKE_AWAY" || billingType === "QUICK_BILL") ? (
           <NormalBilling
@@ -143,6 +150,7 @@ export default function BillingPage() {
             fetchData={fetchData}
             loading={loading}
             branchData={branchData}
+            addOnMap={addOnMap}
           />
         ) : null}
       </div>

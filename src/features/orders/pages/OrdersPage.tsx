@@ -124,6 +124,7 @@ export default function OrderHistory() {
         quantity: Number(item.quantity) || 1,
         price: Number(item.price) || (Number(item.total) / (Number(item.quantity) || 1)) || 0,
         notes: item.notes || undefined,
+        addOns: item.addOns || undefined,
       })),
       subtotal: Number(order.subtotal || order.total || 0),
       discountAmount: Number(order.discountAmount || 0),
