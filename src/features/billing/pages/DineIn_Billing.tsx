@@ -50,7 +50,9 @@ export default function DineIn({
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<any>({});
+  const [cartNotes, setCartNotes] = useState<Record<number, string>>({}); // itemId → special instructions
   const [tableOrders, setTableOrders] = useState<any[]>([]); // all KOTs for selected table
+  const [submitting, setSubmitting] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
   const [showModifyTables, setShowModifyTables] = useState(false);
   const [floorAction, setFloorAction] = useState<
@@ -118,6 +120,7 @@ export default function DineIn({
           : [];
       setTableOrders(orders);
       setCart({});
+                          setCartNotes({});
     } catch {
       /* silent */
     }
@@ -125,25 +128,32 @@ export default function DineIn({
 
   // Save current cart as a NEW KOT — each save = separate running order in kitchen
   const handleSaveOrder = async () => {
-    if (!selectedTable || !cartItems.length) return;
-    const items = cartItems.map((item) => ({
-      menuItemId: item.id,
-      itemName: item.name,
-      quantity: cart[item.id],
-      price: item.price,
-    }));
-    const response = await saveRunningOrder({
-      restaurantId: user.restaurantId,
-      branchId: user.branchId,
-      createdById: user.id,
-      tableId: selectedTable.id,
-      items,
-      orderType: "DINE_IN",
-    });
-    if (response.success) {
-      setCart({});
-      await fetchExistingOrder(selectedTable.id); // refresh order history
-      await fetchData();
+    if (!selectedTable || !cartItems.length || submitting) return;
+    setSubmitting(true);
+    try {
+      const items = cartItems.map((item) => ({
+        menuItemId: item.id,
+        itemName: item.name,
+        quantity: cart[item.id],
+        price: item.price,
+        notes: cartNotes[item.id]?.trim() || undefined,
+      }));
+      const response = await saveRunningOrder({
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+        createdById: user.id,
+        tableId: selectedTable.id,
+        items,
+        orderType: "DINE_IN",
+      });
+      if (response.success) {
+        setCart({});
+                          setCartNotes({});
+        await fetchExistingOrder(selectedTable.id); // refresh order history
+        await fetchData();
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -166,7 +176,8 @@ export default function DineIn({
 
   // Close all running orders for this table and generate the bill
   const handleGenerateBill = async (billingData: any) => {
-    if (!selectedTable) return;
+    if (!selectedTable || submitting) return;
+    setSubmitting(true);
     try {
       const response = await closeRunningOrder({
         tableId: selectedTable.id,
@@ -188,6 +199,7 @@ export default function DineIn({
       });
       if (response.success) {
         setCart({});
+                          setCartNotes({});
         setTableOrders([]);
         setCustomerName("");
         setCustomerPhone("");
@@ -198,6 +210,8 @@ export default function DineIn({
       }
     } catch {
       /* silent */
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -459,6 +473,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           await fetchExistingOrder(table.id);
                         else {
                           setCart({});
+                          setCartNotes({});
                           setTableOrders([]);
                         }
                       }}
@@ -943,10 +958,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <div className="flex shrink-0 items-center gap-1.5">
                       <button
                         onClick={handleSaveOrder}
-                        disabled={loading || !cartItems.length}
+                        disabled={loading || submitting || !cartItems.length}
                         className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm disabled:opacity-50"
                       >
-                        {loading ? "Saving..." : "Save"}
+                        {submitting ? "Saving..." : "Save"}
                       </button>
                       <button
                         onClick={() => setStep("CART")}
@@ -957,7 +972,8 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       {canCheckout && tableOrders.length > 0 && (
                         <button
                           onClick={handleGoToBilling}
-                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600"
+                          disabled={submitting}
+                          className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-600 disabled:opacity-50"
                         >
                           Bill
                         </button>
@@ -1124,10 +1140,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <div className="flex gap-1.5">
                       <button
                         onClick={handleSaveOrder}
-                        disabled={loading || !cartItems.length}
+                        disabled={loading || submitting || !cartItems.length}
                         className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
                       >
-                        {loading ? "Saving..." : "Save"}
+                        {submitting ? "Saving..." : "Save"}
                       </button>
                       <button
                         onClick={() => setStep("CART")}
@@ -1140,7 +1156,8 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {canCheckout && tableOrders.length > 0 && (
                     <button
                       onClick={handleGoToBilling}
-                      className="w-full rounded-xl bg-emerald-500 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 active:scale-[0.99]"
+                      disabled={submitting}
+                      className="w-full rounded-xl bg-emerald-500 py-2 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 active:scale-[0.99] disabled:opacity-50"
                     >
                       Generate Bill · ₹{effectiveBillTotal}
                     </button>
@@ -1177,7 +1194,8 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {canCheckout && tableOrders.length > 0 && (
                     <button
                       onClick={handleGoToBilling}
-                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600"
+                      disabled={submitting}
+                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600 disabled:opacity-50"
                     >
                       Generate Bill
                     </button>
@@ -1361,36 +1379,46 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       {cartItems.map((item: any) => (
                         <div
                           key={item.id}
-                          className="flex items-center gap-2.5 border-b border-amber-100 px-3 py-2 last:border-0"
+                          className="border-b border-amber-100 px-3 py-2 last:border-0"
                         >
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-xs font-bold text-gray-900">
-                              {item.name}
-                            </p>
-                            <p className="text-[10px] text-gray-500">
-                              ₹{item.price} each
+                          <div className="flex items-center gap-2.5">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-xs font-bold text-gray-900">
+                                {item.name}
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                ₹{item.price} each
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 rounded-lg bg-red-500 px-1 py-1 text-white">
+                              <button
+                                onClick={() => decreaseQty(item.id)}
+                                className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90"
+                              >
+                                <Minus className="h-2.5 w-2.5" strokeWidth={3} />
+                              </button>
+                              <span className="min-w-[18px] text-center text-xs font-black">
+                                {cart[item.id]}
+                              </span>
+                              <button
+                                onClick={() => increaseQty(item.id)}
+                                className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90"
+                              >
+                                <Plus className="h-2.5 w-2.5" strokeWidth={3} />
+                              </button>
+                            </div>
+                            <p className="shrink-0 text-xs font-black text-red-600">
+                              ₹{item.price * cart[item.id]}
                             </p>
                           </div>
-                          <div className="flex items-center gap-1 rounded-lg bg-red-500 px-1 py-1 text-white">
-                            <button
-                              onClick={() => decreaseQty(item.id)}
-                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90"
-                            >
-                              <Minus className="h-2.5 w-2.5" strokeWidth={3} />
-                            </button>
-                            <span className="min-w-[18px] text-center text-xs font-black">
-                              {cart[item.id]}
-                            </span>
-                            <button
-                              onClick={() => increaseQty(item.id)}
-                              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 active:scale-90"
-                            >
-                              <Plus className="h-2.5 w-2.5" strokeWidth={3} />
-                            </button>
-                          </div>
-                          <p className="shrink-0 text-xs font-black text-red-600">
-                            ₹{item.price * cart[item.id]}
-                          </p>
+                          <input
+                            value={cartNotes[item.id] || ""}
+                            onChange={(e) =>
+                              setCartNotes((prev) => ({ ...prev, [item.id]: e.target.value }))
+                            }
+                            placeholder="Add note (e.g. no onions)"
+                            className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] outline-none transition focus:border-red-300"
+                          />
                         </div>
                       ))}
                       <div className="flex items-center justify-between bg-amber-50 px-3 py-2">
@@ -1446,7 +1474,8 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     {canCheckout && tableOrders.length > 0 && (
                       <button
                         onClick={handleGoToBilling}
-                        className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-600"
+                        disabled={submitting}
+                        className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white shadow-lg transition hover:bg-emerald-600 disabled:opacity-50"
                       >
                         Generate Bill
                       </button>
@@ -1469,6 +1498,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               setStep={setStep}
               onConfirm={handleGenerateBill}
               billing={branchData.billing}
+              loading={submitting}
             />
           )}
         </div>

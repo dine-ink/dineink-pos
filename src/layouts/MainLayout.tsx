@@ -1,17 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
-import { logout } from "@/store/slices/authSlice";
+import { logout, setAuth } from "@/store/slices/authSlice";
 import { useAppSelector } from "@/store/hooks";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
 import { Receipt, ClipboardList, Wifi, Store, Bell, LogOut, User, ChefHat, CheckCircle } from "lucide-react";
 import { getAllRunningOrders, updateRunningOrderStatus } from "@/services/runningOrderService";
+import { getMyProfile } from "@/services/authService";
 
 export default function MainLayout() {
   const location = useLocation();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, token } = useAppSelector((state) => state.auth);
   const [readyOrders, setReadyOrders] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -50,6 +51,30 @@ export default function MainLayout() {
     const id = setInterval(fetch, 30000);
     return () => clearInterval(id);
   }, [isKitchen, user?.restaurantId, user?.branchId]);
+
+  // Periodically refresh this staff member's own profile so a branch/role
+  // reassignment made on the owner dashboard takes effect without a manual
+  // logout/login — the token's claims never change mid-session otherwise.
+  useEffect(() => {
+    if (!token) return;
+    const refreshProfile = async () => {
+      try {
+        const res = await getMyProfile();
+        if (res.success && res.data) {
+          dispatch(
+            setAuth({
+              token,
+              user: res.data,
+              restaurant: res.data.restaurant,
+              branch: res.data.branch,
+            }),
+          );
+        }
+      } catch { /* silent */ }
+    };
+    const id = setInterval(refreshProfile, 5 * 60 * 1000);
+    return () => clearInterval(id);
+  }, [token, dispatch]);
 
   // Close notification dropdown on outside click
   useEffect(() => {

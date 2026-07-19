@@ -1,7 +1,12 @@
 import { useState, useEffect } from "react";
 import { useAppSelector } from "@/store/hooks";
-import { getCashSessions, openCashSession, closeCashSession } from "@/services/cashService";
-import { Wallet, LockOpen, Lock, RefreshCw, AlertTriangle } from "lucide-react";
+import {
+  getCashSessions,
+  openCashSession,
+  closeCashSession,
+  getShiftSalesSummary,
+} from "@/services/cashService";
+import { Wallet, LockOpen, Lock, RefreshCw, AlertTriangle, Receipt } from "lucide-react";
 
 export default function CashSession() {
   const { user } = useAppSelector((state) => state.auth);
@@ -18,6 +23,7 @@ export default function CashSession() {
   const [actualCash, setActualCash] = useState("");
   const [closeNotes, setCloseNotes] = useState("");
   const [closeLoading, setCloseLoading] = useState(false);
+  const [shiftSummary, setShiftSummary] = useState<any>(null);
 
   const fetchSessions = async () => {
     if (!user?.branchId) return;
@@ -37,6 +43,20 @@ export default function CashSession() {
   useEffect(() => {
     fetchSessions();
   }, [user?.branchId]);
+
+  // Shift sales summary — shown alongside the cash reconciliation so closing
+  // a session isn't just "does the drawer match" with no visibility into
+  // what the shift actually sold.
+  useEffect(() => {
+    if (!openSession || !user?.branchId) {
+      setShiftSummary(null);
+      return;
+    }
+    const businessDate = new Date(openSession.businessDate).toISOString().slice(0, 10);
+    getShiftSalesSummary(user.branchId, businessDate)
+      .then((res) => setShiftSummary(res.success ? res.data : null))
+      .catch(() => setShiftSummary(null));
+  }, [openSession, user?.branchId]);
 
   const handleOpen = async () => {
     if (!user || !openingCash) return;
@@ -123,6 +143,46 @@ export default function CashSession() {
               <p className="text-sm font-bold text-gray-900 truncate">{openSession.openedBy?.name ?? "—"}</p>
             </div>
           </div>
+
+          {/* Shift sales summary */}
+          {shiftSummary && (
+            <div className="rounded-lg border border-emerald-100 bg-white p-3 space-y-2">
+              <div className="flex items-center gap-1.5">
+                <Receipt className="h-3.5 w-3.5 text-emerald-600" />
+                <p className="text-[11px] font-bold text-gray-700">Today's Sales</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Revenue</p>
+                  <p className="text-sm font-black text-gray-900">
+                    ₹{Number(shiftSummary.totalRevenue).toLocaleString()}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Bills</p>
+                  <p className="text-sm font-black text-gray-900">{shiftSummary.billCount}</p>
+                </div>
+                <div>
+                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Avg Bill</p>
+                  <p className="text-sm font-black text-gray-900">
+                    ₹{Math.round(shiftSummary.avgBillValue).toLocaleString()}
+                  </p>
+                </div>
+              </div>
+              {shiftSummary.paymentBreakdown?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 border-t border-gray-100 pt-2">
+                  {shiftSummary.paymentBreakdown.map((p: any) => (
+                    <span
+                      key={p.method}
+                      className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-bold text-gray-600"
+                    >
+                      {p.method}: ₹{Number(p.amount).toLocaleString()} ({p.count})
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Close session form */}
           <div className="space-y-2 pt-1 border-t border-emerald-200">

@@ -29,3 +29,12 @@ export const closeCashSession = async (
   const response = await api.put(`/cash/close/${sessionId}`, data);
   return response.data;
 };
+
+// Revenue/bill-count/payment breakdown for the day, shown to the cashier
+// alongside the cash reconciliation when closing their session.
+export const getShiftSalesSummary = async (branchId: number, businessDate: string) => {
+  const response = await api.get(
+    `/cash/shift-summary/${branchId}?businessDate=${businessDate}`,
+  );
+  return response.data;
+};

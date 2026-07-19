@@ -10,6 +10,8 @@ type Props = {
   decreaseQty: any;
   setStep: any;
   onHold?: () => void;
+  notes?: Record<number, string>;
+  setNote?: (id: number, note: string) => void;
 };
 
 export default function CartSection({
@@ -21,6 +23,8 @@ export default function CartSection({
   decreaseQty,
   setStep,
   onHold,
+  notes = {},
+  setNote,
 }: Props) {
   const { user } = useAppSelector((state) => state.auth);
   return (
@@ -79,48 +83,58 @@ export default function CartSection({
               {cartItems.map((item: any) => (
                 <div
                   key={item.id}
-                  className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50 p-2.5"
+                  className="rounded-xl border border-gray-100 bg-gray-50 p-2.5"
                 >
-                  {/* ICON */}
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50">
-                    <ShoppingBag className="h-3.5 w-3.5 text-red-400" />
-                  </div>
+                  <div className="flex items-center gap-2.5">
+                    {/* ICON */}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-50">
+                      <ShoppingBag className="h-3.5 w-3.5 text-red-400" />
+                    </div>
 
-                  {/* INFO */}
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate text-xs font-bold text-gray-900">
-                      {item.name}
-                    </p>
-                    <p className="text-[10px] text-gray-500">
-                      ₹{item.price} each
-                    </p>
-                  </div>
+                    {/* INFO */}
+                    <div className="flex-1 min-w-0">
+                      <p className="truncate text-xs font-bold text-gray-900">
+                        {item.name}
+                      </p>
+                      <p className="text-[10px] text-gray-500">
+                        ₹{item.price} each
+                      </p>
+                    </div>
 
-                  {/* QTY STEPPER */}
-                  <div className="flex items-center gap-1 rounded-lg bg-red-500 px-1 py-1 text-white">
-                    <button
-                      onClick={() => decreaseQty(item.id)}
-                      className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 transition active:scale-90"
-                    >
-                      <Minus className="h-2.5 w-2.5" strokeWidth={3} />
-                    </button>
-                    <span className="min-w-[18px] text-center text-xs font-black">
-                      {activeCart[item.id]}
-                    </span>
-                    <button
-                      onClick={() => increaseQty(item.id)}
-                      className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 transition active:scale-90"
-                    >
-                      <Plus className="h-2.5 w-2.5" strokeWidth={3} />
-                    </button>
-                  </div>
+                    {/* QTY STEPPER */}
+                    <div className="flex items-center gap-1 rounded-lg bg-red-500 px-1 py-1 text-white">
+                      <button
+                        onClick={() => decreaseQty(item.id)}
+                        className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 transition active:scale-90"
+                      >
+                        <Minus className="h-2.5 w-2.5" strokeWidth={3} />
+                      </button>
+                      <span className="min-w-[18px] text-center text-xs font-black">
+                        {activeCart[item.id]}
+                      </span>
+                      <button
+                        onClick={() => increaseQty(item.id)}
+                        className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 transition active:scale-90"
+                      >
+                        <Plus className="h-2.5 w-2.5" strokeWidth={3} />
+                      </button>
+                    </div>
 
-                  {/* TOTAL */}
-                  <div className="shrink-0 text-right min-w-[48px]">
-                    <p className="text-sm font-black text-red-600">
-                      ₹{item.price * activeCart[item.id]}
-                    </p>
+                    {/* TOTAL */}
+                    <div className="shrink-0 text-right min-w-[48px]">
+                      <p className="text-sm font-black text-red-600">
+                        ₹{item.price * activeCart[item.id]}
+                      </p>
+                    </div>
                   </div>
+                  {setNote && (
+                    <input
+                      value={notes[item.id] || ""}
+                      onChange={(e) => setNote(item.id, e.target.value)}
+                      placeholder="Add note (e.g. no onions)"
+                      className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] outline-none transition focus:border-red-300"
+                    />
+                  )}
                 </div>
               ))}
             </div>

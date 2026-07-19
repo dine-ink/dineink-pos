@@ -187,7 +187,7 @@ export type BillData = {
   customerName?: string;
   billingType: string;
   paymentMethod: string;
-  items: Array<{ itemName: string; quantity: number; price: number }>;
+  items: Array<{ itemName: string; quantity: number; price: number; notes?: string }>;
   subtotal: number;
   discountAmount: number;
   cgst: number;
@@ -266,6 +266,10 @@ function buildReceipt(bill: BillData): string {
     const amt = `Rs.${(item.price * item.quantity).toFixed(2)}`.padStart(AC);
 
     r += ln(name + qty + amt);
+
+    if (item.notes?.trim()) {
+      r += ln(`  * ${toAscii(item.notes).substring(0, IC + QC + AC - 4)}`);
+    }
   }
 
   r += divider();
@@ -403,13 +407,22 @@ async function printWifi(
     return true; // unlikely — printer doesn't respond with HTTP
   } catch (e: any) {
     const msg = String(e?.message || e || "").toLowerCase();
-    // Genuine connection failure → printer is offline or wrong IP
+    // Genuine connection failure → printer is offline or wrong IP.
+    // A *connect-phase* timeout belongs here too — nothing ever picked up
+    // the connection, the most common real-world signature of a powered-off
+    // printer or a mistyped IP, which previously fell through to "sent OK"
+    // below. A *read*-phase timeout is deliberately excluded: per the note
+    // above, the printer never replies, so timing out waiting for a
+    // response after a successful connect is the expected outcome, not a
+    // failure — only a message that explicitly mentions the connect phase
+    // is treated as offline.
     if (
       msg.includes("refused") ||
       msg.includes("unreachable") ||
       msg.includes("failed to connect") ||
       msg.includes("econnrefused") ||
-      msg.includes("no route")
+      msg.includes("no route") ||
+      (msg.includes("connect") && (msg.includes("timeout") || msg.includes("timed out")))
     ) {
       return false;
     }
@@ -526,7 +539,10 @@ function printReceiptBrowser(bill: BillData): void {
         `<td class="IN">${escHtml(item.itemName)}</td>` +
         `<td class="IQ">${item.quantity}</td>` +
         `<td class="IA">&#8377;${(item.price * item.quantity).toFixed(2)}</td>` +
-        `</tr>`,
+        `</tr>` +
+        (item.notes?.trim()
+          ? `<tr><td class="INote" colspan="3">&#128221; ${escHtml(item.notes)}</td></tr>`
+          : ""),
     )
     .join("");
 
@@ -563,6 +579,7 @@ table{width:100%;border-collapse:collapse}
 .IN{width:60%;padding:3px 0;word-break:break-word}
 .IQ{width:10%;text-align:center}
 .IA{width:30%;text-align:right;font-weight:700}
+.INote{padding:0 0 3px 0;font-size:10px;font-style:italic;color:#555;word-break:break-word}
 .totrow{display:flex;justify-content:space-between;font-size:16px;font-weight:900;padding:6px 0;border-top:2px solid black;border-bottom:2px solid black}
 .foot{text-align:center;font-size:10px;line-height:1.5;padding-top:5px}
 @media print{

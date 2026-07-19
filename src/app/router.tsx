@@ -7,7 +7,6 @@ import PageLoader from "@/components/ui/PageLoader";
 
 const BillingPage = lazy(() => import("@/features/billing/pages/BillingPage"));
 const OrdersPage = lazy(() => import("@/features/orders/pages/OrdersPage"));
-const TablesPage = lazy(() => import("@/features/tables/pages/TablesPage"));
 const OnlineOrdersPage = lazy(() => import("@/features/online-orders/pages/LiveOrdersPage"));
 const KitchenPage = lazy(() => import("@/features/kitchen/pages/KitchenPage"));
 const LoginPage = lazy(() => import("@/features/auth/LoginPage"));
@@ -30,7 +29,6 @@ export default function Router() {
             <Route index element={<DefaultRedirect />} />
 
             <Route path="billing" element={<BillingPage />} />
-            <Route path="tables" element={<TablesPage />} />
 
             <Route path="orders" element={
               <ProtectedRoute allowedRoles={["CASHIER"]}>

@@ -4,6 +4,7 @@ import { useAppSelector } from "@/store/hooks";
 import { MagnifyingGlassIcon, PrinterIcon } from "@heroicons/react/24/solid";
 import PageLoader from "@/components/ui/PageLoader";
 import { api } from "@/services/api";
+import { cancelBill } from "@/services/runningOrderService";
 import { getSavedPrinter, printReceipt, type BillData } from "@/utils/printer";
 
 const TYPE_BADGE: Record<string, string> = {
@@ -14,7 +15,13 @@ const TYPE_BADGE: Record<string, string> = {
 };
 const getTypeBadge = (t: string) => TYPE_BADGE[t] || "bg-gray-100 text-gray-700";
 const getPayBadge = (s: string) =>
-  s === "PAID" ? "bg-emerald-100 text-emerald-700" : s === "PARTIAL" ? "bg-yellow-100 text-yellow-700" : "bg-red-100 text-red-700";
+  s === "PAID"
+    ? "bg-emerald-100 text-emerald-700"
+    : s === "PARTIAL"
+      ? "bg-yellow-100 text-yellow-700"
+      : s === "CANCELLED"
+        ? "bg-gray-200 text-gray-500"
+        : "bg-red-100 text-red-700";
 const getStatusBadge = (s: string) =>
   s === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : s === "READY" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
 const customerDisplay = (order: any) =>
@@ -25,10 +32,13 @@ export default function OrderHistory() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasPrinter, setHasPrinter] = useState(false);
+  const [voiding, setVoiding] = useState<number | null>(null);
   const { user } = useAppSelector((state) => state.auth);
   // On web/laptop the browser print dialog handles USB printers — always enabled
   const isNative = Capacitor.isNativePlatform();
   const canPrint = !isNative || hasPrinter;
+  // Voiding a paid bill is financially sensitive — managers only.
+  const canVoid = user?.role === "MANAGER";
 
   useEffect(() => {
     setHasPrinter(!!getSavedPrinter());
@@ -78,6 +88,28 @@ export default function OrderHistory() {
     } catch { /* silent */ }
   };
 
+  const handleVoidBill = async (order: any) => {
+    if (
+      !window.confirm(
+        `Void bill ${order.orderNo} for ₹${Number(order.total || 0).toFixed(2)}? This cannot be undone.`,
+      )
+    )
+      return;
+    try {
+      setVoiding(order.id);
+      const res = await cancelBill(order.id);
+      if (res.success) {
+        fetchOrders();
+      } else {
+        alert(res.message || "Failed to void bill");
+      }
+    } catch (err: any) {
+      alert(err?.response?.data?.message || "Failed to void bill");
+    } finally {
+      setVoiding(null);
+    }
+  };
+
   const handleDirectPrint = async (order: any) => {
     const bill: BillData = {
       shopName: user?.restaurant?.name || user?.branch?.name || "Restaurant",
@@ -91,6 +123,7 @@ export default function OrderHistory() {
         itemName: item.itemName || item.name || "",
         quantity: Number(item.quantity) || 1,
         price: Number(item.price) || (Number(item.total) / (Number(item.quantity) || 1)) || 0,
+        notes: item.notes || undefined,
       })),
       subtotal: Number(order.subtotal || order.total || 0),
       discountAmount: Number(order.discountAmount || 0),
@@ -176,6 +209,13 @@ export default function OrderHistory() {
                       Complete
                     </button>
                   )}
+                  {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
+                    <button onClick={() => handleVoidBill(order)}
+                      disabled={voiding === order.id}
+                      className="rounded-lg bg-red-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
+                      {voiding === order.id ? "Voiding…" : "Void"}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -233,6 +273,13 @@ export default function OrderHistory() {
                           <button onClick={() => handleCompleteOrder(order)}
                             className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
                             Complete
+                          </button>
+                        )}
+                        {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
+                          <button onClick={() => handleVoidBill(order)}
+                            disabled={voiding === order.id}
+                            className="rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
+                            {voiding === order.id ? "Voiding…" : "Void"}
                           </button>
                         )}
                       </div>

@@ -10,6 +10,7 @@ import { printReceipt } from "@/utils/printer";
 type HeldOrder = {
   id: string;
   cart: Record<number, number>;
+  cartNotes: Record<number, string>;
   customerName: string;
   customerPhone: string;
   customerAddress: string;
@@ -43,6 +44,7 @@ export default function NormalBilling({
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [cart, setCart] = useState<Record<number, number>>({});
+  const [cartNotes, setCartNotes] = useState<Record<number, string>>({});
   const HELD_STORAGE_KEY = `held_orders_${billingType}`;
   const [heldOrders, setHeldOrders] = useState<HeldOrder[]>(() => {
     try {
@@ -69,6 +71,7 @@ export default function NormalBilling({
     const newHeld: HeldOrder = {
       id: Date.now().toString(),
       cart,
+      cartNotes,
       customerName,
       customerPhone,
       customerAddress,
@@ -77,6 +80,7 @@ export default function NormalBilling({
     };
     setHeldOrders((prev) => [...prev, newHeld]);
     setCart({});
+    setCartNotes({});
     setCustomerName("");
     setCustomerPhone("");
     setCustomerAddress("");
@@ -90,6 +94,7 @@ export default function NormalBilling({
       const currentAsHeld: HeldOrder = {
         id: Date.now().toString(),
         cart,
+        cartNotes,
         customerName,
         customerPhone,
         customerAddress,
@@ -101,6 +106,7 @@ export default function NormalBilling({
       setHeldOrders((prev) => prev.filter((h) => h.id !== held.id));
     }
     setCart(held.cart);
+    setCartNotes(held.cartNotes || {});
     setCustomerName(held.customerName);
     setCustomerPhone(held.customerPhone);
     setCustomerAddress(held.customerAddress);
@@ -150,6 +156,7 @@ export default function NormalBilling({
         itemName: item.name,
         quantity: cart[item.id],
         price: item.price,
+        notes: cartNotes[item.id]?.trim() || undefined,
       }));
       const saveResponse = await saveRunningOrder({
         restaurantId: user.restaurantId,
@@ -182,6 +189,7 @@ export default function NormalBilling({
       });
 
       setCart({});
+      setCartNotes({});
       setCustomerName("");
       setCustomerPhone("");
       setCustomerAddress("");
@@ -363,6 +371,8 @@ export default function NormalBilling({
           decreaseQty={decreaseQty}
           setStep={setStep}
           onHold={holdCurrentOrder}
+          notes={cartNotes}
+          setNote={(id, note) => setCartNotes((prev) => ({ ...prev, [id]: note }))}
         />
       )}
       {step === "CUSTOMER" && (

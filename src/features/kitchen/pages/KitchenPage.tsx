@@ -6,12 +6,14 @@ import {
   approveItemCancel,
   rejectItemCancel,
 } from "@/services/runningOrderService";
-import { ChefHat, RefreshCw, Clock, UtensilsCrossed, Layers } from "lucide-react";
+import { getBranchDetails } from "@/services/branchService";
+import { setMenuItemAvailability } from "@/services/menuService";
+import { ChefHat, RefreshCw, Clock, UtensilsCrossed, Layers, Ban, Search } from "lucide-react";
 import PageLoader from "@/components/ui/PageLoader";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type OrderItem = { id: number; name: string; qty: number; status: string };
+type OrderItem = { id: number; name: string; qty: number; status: string; notes?: string | null };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -44,6 +46,7 @@ function flattenItems(order: any, skipBatchIds?: Set<number>): OrderItem[] {
           name:   item.itemName ?? item.name ?? "Item",
           qty:    item.quantity ?? 1,
           status: item.status ?? "PENDING",
+          notes:  item.notes,
         });
       });
     });
@@ -54,6 +57,7 @@ function flattenItems(order: any, skipBatchIds?: Set<number>): OrderItem[] {
         name:   item.itemName ?? item.name ?? "Item",
         qty:    item.quantity ?? 1,
         status: item.status ?? "PENDING",
+        notes:  item.notes,
       });
     });
   }
@@ -181,21 +185,28 @@ function OrderCard({
             <button
               key={item.id}
               onClick={() => onToggle(order.id, item.id)}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition active:scale-[0.98] ${
+              className={`flex w-full flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition active:scale-[0.98] ${
                 checked ? "bg-emerald-50" : "bg-gray-50 hover:bg-gray-100"
               }`}
             >
-              <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition ${
-                checked ? "border-emerald-500 bg-emerald-500" : "border-gray-300"
-              }`}>
-                {checked && <span className="text-[9px] font-black text-white">✓</span>}
+              <div className="flex w-full items-center gap-2">
+                <div className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border-2 transition ${
+                  checked ? "border-emerald-500 bg-emerald-500" : "border-gray-300"
+                }`}>
+                  {checked && <span className="text-[9px] font-black text-white">✓</span>}
+                </div>
+                <span className={`flex-1 text-sm font-semibold leading-tight ${checked ? "text-gray-400 line-through" : "text-gray-800"}`}>
+                  {item.name}
+                </span>
+                <span className="shrink-0 rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-black text-gray-700">
+                  ×{item.qty}
+                </span>
               </div>
-              <span className={`flex-1 text-sm font-semibold leading-tight ${checked ? "text-gray-400 line-through" : "text-gray-800"}`}>
-                {item.name}
-              </span>
-              <span className="shrink-0 rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-black text-gray-700">
-                ×{item.qty}
-              </span>
+              {item.notes && (
+                <p className="pl-6 text-[10px] font-bold italic text-amber-600">
+                  📝 {item.notes}
+                </p>
+              )}
             </button>
           );
         })}
@@ -273,6 +284,85 @@ function ClubView({ orders, processedBatches }: { orders: any[]; processedBatche
   );
 }
 
+// ─── Availability View ───────────────────────────────────────────────────────
+// Lets kitchen staff mark a dish sold out (or back in stock) themselves,
+// since they're the ones who know what ingredients have actually run out.
+
+type MenuItemRow = { id: number; name: string; categoryId: number | null; isAvailable: boolean };
+
+function AvailabilityView({
+  items, categories, search, setSearch, togglingId, onToggle,
+}: {
+  items: MenuItemRow[];
+  categories: { id: number; name: string }[];
+  search: string;
+  setSearch: (v: string) => void;
+  togglingId: number | null;
+  onToggle: (item: MenuItemRow) => void;
+}) {
+  const categoryName = (id: number | null) =>
+    categories.find(c => c.id === id)?.name ?? "Uncategorized";
+
+  const filtered = items.filter(i =>
+    i.name.toLowerCase().includes(search.trim().toLowerCase()),
+  );
+  const grouped = filtered.reduce<Record<string, MenuItemRow[]>>((acc, item) => {
+    const key = categoryName(item.categoryId);
+    (acc[key] ??= []).push(item);
+    return acc;
+  }, {});
+
+  if (items.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center py-16 text-center">
+        <Ban className="h-10 w-10 text-gray-200" />
+        <p className="mt-3 text-sm font-bold text-gray-400">No menu items found</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="relative max-w-xs">
+        <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search dish..."
+          className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-8 pr-3 text-xs outline-none transition focus:border-red-300"
+        />
+      </div>
+      {Object.entries(grouped).map(([cat, catItems]) => (
+        <div key={cat} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-3 py-2">
+            <p className="text-xs font-black text-gray-700">{cat}</p>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {catItems.map(item => (
+              <div key={item.id} className="flex items-center justify-between px-3 py-2.5">
+                <span className={`text-sm font-semibold ${item.isAvailable ? "text-gray-900" : "text-gray-400 line-through"}`}>
+                  {item.name}
+                </span>
+                <button
+                  onClick={() => onToggle(item)}
+                  disabled={togglingId === item.id}
+                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-black transition disabled:opacity-50 ${
+                    item.isAvailable
+                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                      : "bg-red-100 text-red-600 hover:bg-red-200"
+                  }`}
+                >
+                  {togglingId === item.id ? "…" : item.isAvailable ? "Available" : "Sold Out"}
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── KitchenPage ─────────────────────────────────────────────────────────────
 
 export default function KitchenPage() {
@@ -283,7 +373,11 @@ export default function KitchenPage() {
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [now,          setNow]          = useState(Date.now());
   const [doneItems,    setDoneItems]    = useState<Record<number, Set<number>>>({}); // orderId → Set<itemId>
-  const [view,         setView]         = useState<"orders" | "club">("orders");
+  const [view,         setView]         = useState<"orders" | "club" | "availability">("orders");
+  const [menuItems,    setMenuItems]    = useState<MenuItemRow[]>([]);
+  const [categories,   setCategories]   = useState<{ id: number; name: string }[]>([]);
+  const [menuSearch,   setMenuSearch]   = useState("");
+  const [togglingId,   setTogglingId]   = useState<number | null>(null);
 
   const processedBatchesRef = useRef<Map<number, Set<number>>>(new Map());
   const prevStatusRef       = useRef<Map<number, string>>(new Map());
@@ -352,6 +446,37 @@ export default function KitchenPage() {
     const interval = setInterval(fetchOrders, 30000);
     return () => clearInterval(interval);
   }, [fetchOrders]);
+
+  const fetchMenuAvailability = useCallback(async () => {
+    if (!user?.branchId) return;
+    try {
+      const res = await getBranchDetails(user.branchId);
+      const rItems = res?.data?.restaurant?.menuItems ?? [];
+      setMenuItems(rItems.map((m: any) => ({
+        id: m.id, name: m.name, categoryId: m.categoryId, isAvailable: m.isAvailable !== false,
+      })));
+      setCategories(res?.data?.restaurant?.categories ?? []);
+    } catch { /* silent */ }
+  }, [user?.branchId]);
+
+  useEffect(() => {
+    if (view === "availability") fetchMenuAvailability();
+  }, [view, fetchMenuAvailability]);
+
+  const handleToggleAvailability = useCallback(async (item: MenuItemRow) => {
+    const nextAvailable = !item.isAvailable;
+    setTogglingId(item.id);
+    // Optimistic update — kitchen needs this to feel instant during service.
+    setMenuItems(prev => prev.map(m => (m.id === item.id ? { ...m, isAvailable: nextAvailable } : m)));
+    try {
+      await setMenuItemAvailability(item.id, nextAvailable);
+    } catch {
+      // Roll back on failure
+      setMenuItems(prev => prev.map(m => (m.id === item.id ? { ...m, isAvailable: item.isAvailable } : m)));
+    } finally {
+      setTogglingId(null);
+    }
+  }, []);
 
   const handleMarkReady = useCallback(async (order: any) => {
     if (order.batches?.length) {
@@ -457,6 +582,11 @@ export default function KitchenPage() {
                 <Layers className="h-3 w-3" />
                 Club
               </button>
+              <button onClick={() => setView("availability")}
+                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-black transition ${view === "availability" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+                <Ban className="h-3 w-3" />
+                Availability
+              </button>
             </div>
             <button onClick={fetchOrders} disabled={loading}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50">
@@ -469,7 +599,16 @@ export default function KitchenPage() {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
-        {preparingOrders.length === 0 && !loading ? (
+        {view === "availability" ? (
+          <AvailabilityView
+            items={menuItems}
+            categories={categories}
+            search={menuSearch}
+            setSearch={setMenuSearch}
+            togglingId={togglingId}
+            onToggle={handleToggleAvailability}
+          />
+        ) : preparingOrders.length === 0 && !loading ? (
           <div className="flex h-full flex-col items-center justify-center py-16 text-center">
             <UtensilsCrossed className="h-10 w-10 text-gray-300" />
             <p className="mt-3 text-sm font-bold text-gray-500">No active orders</p>
