@@ -1,6 +1,20 @@
 import { api } from "./api";
 
-export const getTodayAttendance = async (branchId: number) => {
+export interface AttendanceRow {
+  id: number;
+  name: string;
+  restaurantId: number;
+  branchId: number;
+  attendanceId: number | null;
+  status: boolean;
+  loginTime: string | null;
+  logoutTime: string | null;
+  totalHours: number;
+}
+
+export const getTodayAttendance = async (
+  branchId: number,
+): Promise<{ success: boolean; data: AttendanceRow[] }> => {
   const response = await api.get(`/admin/attendance/${branchId}`);
 
   return response.data;
@@ -18,22 +32,6 @@ export const loginAttendance = async (data: {
 
 export const logoutAttendance = async (attendanceId: number) => {
   const response = await api.post("/admin/attendance/logout", {
-    attendanceId,
-  });
-
-  return response.data;
-};
-
-export const startBreak = async (attendanceId: number) => {
-  const response = await api.post("/admin/attendance/start-break", {
-    attendanceId,
-  });
-
-  return response.data;
-};
-
-export const endBreak = async (attendanceId: number) => {
-  const response = await api.post("/admin/attendance/end-break", {
     attendanceId,
   });
 

@@ -1,9 +1,32 @@
 import { api } from "./api";
+import { enqueueAction, isNetworkError } from "@/utils/offlineQueue";
 
+// The one write worth protecting from a network blip: a captured KOT the
+// kitchen is waiting on. On a genuine connectivity failure this queues
+// locally instead of throwing, so the cashier can keep taking orders — it
+// syncs automatically once the connection returns (see MainLayout's flush).
+//
+// Safe to queue for every order type: this call only ever creates a
+// RunningOrder (kitchen ticket), never a Bill/invoice — even for takeaway,
+// where it also captures payment-method fields directly onto the
+// RunningOrder, the actual invoiced Bill row is created later via
+// closeRunningOrder (see OrdersPage's "Complete" action), which is where
+// real invoice numbering is at stake, not here.
 export const saveRunningOrder = async (data: any) => {
-  const response = await api.post("/running-orders/saveRunningOrder", data);
-
-  return response.data;
+  try {
+    const response = await api.post("/running-orders/saveRunningOrder", data);
+    return response.data;
+  } catch (err: any) {
+    if (isNetworkError(err)) {
+      enqueueAction(
+        "/running-orders/saveRunningOrder",
+        data,
+        `Order for table ${data.tableId ?? "-"} (${(data.items || []).length} item(s))`,
+      );
+      return { success: true, queuedOffline: true };
+    }
+    throw err;
+  }
 };
 
 // Returns array — each order placement for this table is a separate RunningOrder
@@ -74,5 +97,23 @@ export const discardRunningOrder = async (orderId: number) => {
 
 export const cancelBill = async (billId: number) => {
   const response = await api.patch(`/bills/${billId}/cancel`);
+  return response.data;
+};
+
+export const refundBill = async (
+  billId: number,
+  data: { amount: number; reason?: string; createdById?: number },
+) => {
+  const response = await api.post(`/bills/${billId}/refund`, data);
+  return response.data;
+};
+
+export const transferTable = async (data: {
+  fromTableId: number;
+  toTableId: number;
+  restaurantId: number;
+  branchId: number;
+}) => {
+  const response = await api.post("/running-orders/transferTable", data);
   return response.data;
 };

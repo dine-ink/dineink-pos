@@ -30,11 +30,10 @@ export const closeCashSession = async (
   return response.data;
 };
 
-// Revenue/bill-count/payment breakdown for the day, shown to the cashier
+// Revenue/bill-count/payment breakdown for THIS session's own open→now
+// window (not the whole day — see cash.service.ts), shown to the cashier
 // alongside the cash reconciliation when closing their session.
-export const getShiftSalesSummary = async (branchId: number, businessDate: string) => {
-  const response = await api.get(
-    `/cash/shift-summary/${branchId}?businessDate=${businessDate}`,
-  );
+export const getShiftSalesSummary = async (sessionId: number) => {
+  const response = await api.get(`/cash/shift-summary/session/${sessionId}`);
   return response.data;
 };

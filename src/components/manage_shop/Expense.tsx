@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Save, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { useAppSelector } from "@/store/hooks";
 
@@ -83,6 +84,7 @@ export default function Expense() {
       setUsers(usersRes.data || []);
     } catch (error) {
       console.log(error);
+      toast.error("Couldn't load expenses — check your connection.");
     } finally {
       setLoading(false);
     }
@@ -188,6 +190,7 @@ export default function Expense() {
       await fetchData();
     } catch (error) {
       console.log(error);
+      toast.error("Couldn't save this expense — please try again.");
     }
   };
 
@@ -204,6 +207,7 @@ export default function Expense() {
       await fetchData();
     } catch (error) {
       console.log(error);
+      toast.error("Couldn't delete this expense — please try again.");
     }
   };
 

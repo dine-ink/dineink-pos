@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
+import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import { MagnifyingGlassIcon, PrinterIcon } from "@heroicons/react/24/solid";
 import PageLoader from "@/components/ui/PageLoader";
 import { api } from "@/services/api";
-import { cancelBill } from "@/services/runningOrderService";
+import { cancelBill, refundBill } from "@/services/runningOrderService";
+import { createBill } from "@/services/billService";
 import { getSavedPrinter, printReceipt, type BillData } from "@/utils/printer";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { isNetworkError } from "@/utils/offlineQueue";
 
 const TYPE_BADGE: Record<string, string> = {
   DINE_IN: "bg-blue-100 text-blue-700",
@@ -33,12 +37,18 @@ export default function OrderHistory() {
   const [loading, setLoading] = useState(true);
   const [hasPrinter, setHasPrinter] = useState(false);
   const [voiding, setVoiding] = useState<number | null>(null);
+  const [refundOrder, setRefundOrder] = useState<any>(null);
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundReason, setRefundReason] = useState("");
+  const [refunding, setRefunding] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
+  const isOnline = useOnlineStatus();
   // On web/laptop the browser print dialog handles USB printers — always enabled
   const isNative = Capacitor.isNativePlatform();
   const canPrint = !isNative || hasPrinter;
-  // Voiding a paid bill is financially sensitive — managers only.
+  // Voiding/refunding a paid bill is financially sensitive — managers only.
   const canVoid = user?.role === "MANAGER";
+  const canRefund = user?.role === "MANAGER";
 
   useEffect(() => {
     setHasPrinter(!!getSavedPrinter());
@@ -73,19 +83,102 @@ export default function OrderHistory() {
     });
   }, [orders, search]);
 
-  const handleCompleteOrder = async (order: any) => {
-    try {
-      const res = await api.post(`/running-orders/closeRunningOrder`, {
-        runningOrderId: order.id,
-        customerName: typeof order.customer === "object" && order.customer !== null
-          ? (order.customer as any)?.name || ""
-          : (order.customer as string) || "",
-        customerPhone: order.customerPhone,
+  const completeOrderOffline = async (order: any, resolvedCustomerName: string) => {
+    // Offline — this order's item/tax breakdown is already in local state
+    // (from getBillsService), so build the bill directly rather than
+    // depending on a fresh server read of the RunningOrder.
+    const billItems = (order.items || []).map((i: any) => ({
+        menuItemId: i.menuItemId, itemName: i.itemName, quantity: i.quantity,
+        price: i.price, total: i.total, notes: i.notes, addOns: i.addOns,
+      }));
+      const receiptMeta: Omit<BillData, "billNo"> = {
+        shopName: user?.restaurant?.name || user?.branch?.name || "Restaurant",
+        shopAddress: user?.restaurant?.address || user?.branch?.address,
+        shopGstin: user?.restaurant?.gstNumber || user?.branch?.gstNumber,
+        customerName: resolvedCustomerName || "Walk-in",
+        billingType: order.orderType || "TAKE_AWAY",
         paymentMethod: order.paymentMethod || "CASH",
-        orderType: order.orderType,
-      });
-      if (res.data.success) fetchOrders();
-    } catch { /* silent */ }
+        items: billItems,
+        subtotal: Number(order.subtotal || 0),
+        discountAmount: Number(order.discount || 0),
+        cgst: Number(order.cgst || 0),
+        sgst: Number(order.sgst || 0),
+        serviceChargeAmount: Number(order.serviceCharge || 0),
+        packingCharge: Number(order.packingCharge || 0),
+        grandTotal: Number(order.total || 0),
+        tipAmount: Number(order.tipAmount || 0),
+      };
+
+      const response = await createBill(
+        {
+          restaurantId: user.restaurantId,
+          branchId: user.branchId,
+          createdById: user.id,
+          runningOrderId: order.id,
+          customerName: resolvedCustomerName,
+          customerPhone: order.customerPhone,
+          paymentMethod: order.paymentMethod || "CASH",
+          orderType: order.orderType,
+          items: billItems,
+          subtotal: order.subtotal,
+          discount: order.discount,
+          packingCharge: order.packingCharge,
+          serviceCharge: order.serviceCharge,
+          gst: order.gst,
+          cgst: order.cgst,
+          sgst: order.sgst,
+          total: order.total,
+          tipAmount: order.tipAmount,
+        },
+        receiptMeta,
+      );
+
+    if (response.success) {
+      if (response.queuedOffline) {
+        toast(
+          `No connection — order completed offline as ${response.provisionalBillNo}. The official invoice will print automatically once this syncs.`,
+          { icon: "📴", duration: 6000 },
+        );
+      }
+      fetchOrders();
+    } else {
+      toast.error((response as any).message || "Couldn't complete this order.");
+    }
+  };
+
+  const handleCompleteOrder = async (order: any) => {
+    const resolvedCustomerName =
+      typeof order.customer === "object" && order.customer !== null
+        ? (order.customer as any)?.name || ""
+        : (order.customer as string) || "";
+    try {
+      // isOnline (navigator.onLine) is only ever a hint — it can be true
+      // while the network is still unusable. So the "online" attempt still
+      // falls back to the offline path on a genuine network failure,
+      // instead of just erroring and losing the completion.
+      if (isOnline) {
+        try {
+          const res = await api.post(`/running-orders/closeRunningOrder`, {
+            runningOrderId: order.id,
+            customerName: resolvedCustomerName,
+            customerPhone: order.customerPhone,
+            paymentMethod: order.paymentMethod || "CASH",
+            orderType: order.orderType,
+          });
+          if (res.data.success) fetchOrders();
+          else toast.error(res.data.message || "Couldn't complete this order.");
+          return;
+        } catch (err: any) {
+          if (!isNetworkError(err)) throw err;
+          // Genuine network failure despite isOnline===true — fall through
+          // to the offline path below instead of losing this completion.
+        }
+      }
+
+      await completeOrderOffline(order, resolvedCustomerName);
+    } catch {
+      toast.error("Couldn't complete this order — please try again.");
+    }
   };
 
   const handleVoidBill = async (order: any) => {
@@ -110,7 +203,46 @@ export default function OrderHistory() {
     }
   };
 
+  const openRefundModal = (order: any) => {
+    setRefundOrder(order);
+    setRefundAmount("");
+    setRefundReason("");
+  };
+
+  const handleSubmitRefund = async () => {
+    if (!refundOrder) return;
+    const amount = Number(refundAmount);
+    if (!amount || amount <= 0) {
+      toast.error("Enter a valid refund amount.");
+      return;
+    }
+    if (amount > Number(refundOrder.total || 0)) {
+      toast.error(`Refund can't exceed ₹${Number(refundOrder.total || 0).toFixed(2)}.`);
+      return;
+    }
+    try {
+      setRefunding(true);
+      const res = await refundBill(refundOrder.id, {
+        amount,
+        reason: refundReason || undefined,
+        createdById: user?.id,
+      });
+      if (res.success) {
+        toast.success(`Refunded ₹${amount.toFixed(2)}`);
+        setRefundOrder(null);
+        fetchOrders();
+      } else {
+        toast.error(res.message || "Couldn't process this refund.");
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Couldn't process this refund.");
+    } finally {
+      setRefunding(false);
+    }
+  };
+
   const handleDirectPrint = async (order: any) => {
+    const isReprint = order.orderStatus === "COMPLETED";
     const bill: BillData = {
       shopName: user?.restaurant?.name || user?.branch?.name || "Restaurant",
       shopAddress: user?.restaurant?.address || user?.branch?.address,
@@ -127,14 +259,20 @@ export default function OrderHistory() {
         addOns: item.addOns || undefined,
       })),
       subtotal: Number(order.subtotal || order.total || 0),
-      discountAmount: Number(order.discountAmount || 0),
+      discountAmount: Number(order.discount || 0),
       cgst: Number(order.cgst || 0),
       sgst: Number(order.sgst || 0),
       serviceChargeAmount: Number(order.serviceCharge || 0),
       packingCharge: Number(order.packingCharge || 0),
       grandTotal: Number(order.total || 0),
+      tipAmount: Number(order.tipAmount || 0),
     };
-    await printReceipt(bill);
+    const ok = await printReceipt(bill);
+    if (ok) {
+      toast.success(isReprint ? "Bill reprinted" : "Bill sent to printer");
+    } else {
+      toast.error("Print failed — check the printer connection.");
+    }
   };
 
   if (loading) return <PageLoader />;
@@ -200,7 +338,7 @@ export default function OrderHistory() {
                   <button
                     onClick={() => handleDirectPrint(order)}
                     disabled={!canPrint}
-                    title={canPrint ? "Print Bill" : "No printer configured"}
+                    title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
                     className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                     <PrinterIcon className="h-3.5 w-3.5" />
                   </button>
@@ -208,6 +346,12 @@ export default function OrderHistory() {
                     <button onClick={() => handleCompleteOrder(order)}
                       className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-emerald-600">
                       Complete
+                    </button>
+                  )}
+                  {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
+                    <button onClick={() => openRefundModal(order)}
+                      className="rounded-lg bg-amber-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-amber-600">
+                      Refund
                     </button>
                   )}
                   {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
@@ -266,7 +410,7 @@ export default function OrderHistory() {
                         <button
                           onClick={() => handleDirectPrint(order)}
                           disabled={!canPrint}
-                          title={canPrint ? "Print Bill" : "No printer configured"}
+                          title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
                           className={`flex h-6 w-6 items-center justify-center rounded-md transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                           <PrinterIcon className="h-3 w-3" />
                         </button>
@@ -274,6 +418,12 @@ export default function OrderHistory() {
                           <button onClick={() => handleCompleteOrder(order)}
                             className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
                             Complete
+                          </button>
+                        )}
+                        {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
+                          <button onClick={() => openRefundModal(order)}
+                            className="rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-amber-600">
+                            Refund
                           </button>
                         )}
                         {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
@@ -299,6 +449,58 @@ export default function OrderHistory() {
         </div>
       </div>
 
+      {/* REFUND MODAL */}
+      {refundOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-black text-gray-900">
+                Refund {refundOrder.orderNo}
+              </h3>
+              <button onClick={() => setRefundOrder(null)} className="text-gray-400 hover:text-gray-600">
+                ✕
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-gray-500">
+              Bill total: ₹{Number(refundOrder.total || 0).toFixed(2)}
+            </p>
+
+            <label className="mt-3 block text-[11px] font-bold text-gray-700">Refund Amount (₹)</label>
+            <input
+              type="number"
+              value={refundAmount}
+              onChange={(e) => setRefundAmount(e.target.value)}
+              placeholder="0.00"
+              className="mt-1 h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-amber-400"
+            />
+
+            <label className="mt-3 block text-[11px] font-bold text-gray-700">Reason (optional)</label>
+            <textarea
+              value={refundReason}
+              onChange={(e) => setRefundReason(e.target.value)}
+              placeholder="e.g. customer complaint about a dish"
+              rows={2}
+              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+            />
+
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => setRefundOrder(null)}
+                className="flex-1 rounded-lg border border-gray-200 bg-white py-2 text-xs font-bold text-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmitRefund}
+                disabled={refunding}
+                className="flex-1 rounded-lg bg-amber-500 py-2 text-xs font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {refunding ? "Processing…" : "Confirm Refund"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

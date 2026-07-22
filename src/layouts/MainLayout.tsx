@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
+import toast from "react-hot-toast";
 import { logout, setAuth } from "@/store/slices/authSlice";
 import { useAppSelector } from "@/store/hooks";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { Receipt, ClipboardList, Wifi, Store, Bell, LogOut, User, ChefHat, CheckCircle } from "lucide-react";
+import { Receipt, ClipboardList, Wifi, WifiOff, Store, Bell, LogOut, User, ChefHat, CheckCircle } from "lucide-react";
 import { getAllRunningOrders, updateRunningOrderStatus } from "@/services/runningOrderService";
 import { getMyProfile } from "@/services/authService";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { flushQueue, getQueueCount } from "@/utils/offlineQueue";
 
 export default function MainLayout() {
   const location = useLocation();
@@ -16,6 +19,8 @@ export default function MainLayout() {
   const [readyOrders, setReadyOrders] = useState<any[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
+  const isOnline = useOnlineStatus();
+  const [pendingSyncCount, setPendingSyncCount] = useState(getQueueCount());
 
   const isKitchen = user?.department === "KITCHEN";
   const role = user?.role;
@@ -75,6 +80,32 @@ export default function MainLayout() {
     const id = setInterval(refreshProfile, 5 * 60 * 1000);
     return () => clearInterval(id);
   }, [token, dispatch]);
+
+  // Sync any orders queued while offline — on reconnect, and on a periodic
+  // retry while online (in case a flush attempt itself failed mid-way).
+  useEffect(() => {
+    if (!isOnline) {
+      setPendingSyncCount(getQueueCount());
+      return;
+    }
+    const trySync = async () => {
+      const before = getQueueCount();
+      if (before === 0) return;
+      const { synced, remaining, dropped } = await flushQueue();
+      setPendingSyncCount(remaining);
+      if (synced > 0) {
+        toast.success(`Synced ${synced} offline order${synced > 1 ? "s" : ""}`);
+      }
+      // Something the server permanently rejected (not just "still offline")
+      // — surface it rather than let it silently vanish from the queue.
+      dropped.forEach((d) => {
+        toast.error(`Couldn't sync "${d.description}": ${d.reason}`, { duration: 8000 });
+      });
+    };
+    trySync();
+    const id = setInterval(trySync, 15000);
+    return () => clearInterval(id);
+  }, [isOnline]);
 
   // Close notification dropdown on outside click
   useEffect(() => {
@@ -140,11 +171,29 @@ export default function MainLayout() {
 
           {/* RIGHT ACTIONS */}
           <div className="flex items-center gap-1">
-            {/* LIVE INDICATOR */}
-            <div className="hidden xl:flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1">
-              <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-              <span className="text-[9px] font-bold tracking-widest text-white uppercase">Live</span>
-            </div>
+            {/* CONNECTIVITY INDICATOR */}
+            {isOnline ? (
+              pendingSyncCount > 0 ? (
+                <div className="hidden xl:flex items-center gap-1 rounded-lg bg-amber-400/20 px-2 py-1">
+                  <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
+                  <span className="text-[9px] font-bold tracking-widest text-white uppercase">
+                    Syncing {pendingSyncCount}
+                  </span>
+                </div>
+              ) : (
+                <div className="hidden xl:flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1">
+                  <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  <span className="text-[9px] font-bold tracking-widest text-white uppercase">Live</span>
+                </div>
+              )
+            ) : (
+              <div className="flex items-center gap-1 rounded-lg bg-black/20 px-2 py-1">
+                <WifiOff className="h-3 w-3 text-white" />
+                <span className="text-[9px] font-bold tracking-widest text-white uppercase">
+                  Offline{pendingSyncCount > 0 ? ` · ${pendingSyncCount}` : ""}
+                </span>
+              </div>
+            )}
 
             {/* NOTIFICATION BELL */}
             <div ref={notifRef} className="relative">

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import {
   getCashSessions,
@@ -6,7 +7,7 @@ import {
   closeCashSession,
   getShiftSalesSummary,
 } from "@/services/cashService";
-import { Wallet, LockOpen, Lock, RefreshCw, AlertTriangle, Receipt } from "lucide-react";
+import { Wallet, LockOpen, Lock, RefreshCw, AlertTriangle, Receipt, Printer, Users } from "lucide-react";
 
 export default function CashSession() {
   const { user } = useAppSelector((state) => state.auth);
@@ -25,6 +26,20 @@ export default function CashSession() {
   const [closeLoading, setCloseLoading] = useState(false);
   const [shiftSummary, setShiftSummary] = useState<any>(null);
 
+  // Other cashiers' currently-open sessions on this branch — informational
+  // only (each cashier only opens/closes/sees their own drawer).
+  const otherOpenSessions = sessions.filter(
+    (s) => s.status === "OPEN" && s.openedById !== user?.id,
+  );
+
+  // Live preview of expected cash while the session is still open —
+  // openSession.expectedCash is a DB column that's only populated at close
+  // time (0 until then), so it can't be used for a pre-close preview.
+  const liveShiftCash = shiftSummary?.paymentBreakdown?.find(
+    (p: any) => p.method === "CASH",
+  )?.amount || 0;
+  const liveExpectedCash = Number(openSession?.openingCash || 0) + Number(liveShiftCash);
+
   const fetchSessions = async () => {
     if (!user?.branchId) return;
     try {
@@ -32,7 +47,9 @@ export default function CashSession() {
       const res = await getCashSessions(user.branchId);
       const all: any[] = res.data || [];
       setSessions(all);
-      setOpenSession(all.find((s) => s.status === "OPEN") ?? null);
+      // A branch can have several cashiers with concurrent open sessions —
+      // each only sees and reconciles their own drawer, not anyone else's.
+      setOpenSession(all.find((s) => s.status === "OPEN" && s.openedById === user?.id) ?? null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -46,17 +63,17 @@ export default function CashSession() {
 
   // Shift sales summary — shown alongside the cash reconciliation so closing
   // a session isn't just "does the drawer match" with no visibility into
-  // what the shift actually sold.
+  // what the shift actually sold. Scoped to THIS session's own open→now
+  // window server-side, not the whole business day.
   useEffect(() => {
-    if (!openSession || !user?.branchId) {
+    if (!openSession) {
       setShiftSummary(null);
       return;
     }
-    const businessDate = new Date(openSession.businessDate).toISOString().slice(0, 10);
-    getShiftSalesSummary(user.branchId, businessDate)
+    getShiftSalesSummary(openSession.id)
       .then((res) => setShiftSummary(res.success ? res.data : null))
       .catch(() => setShiftSummary(null));
-  }, [openSession, user?.branchId]);
+  }, [openSession]);
 
   const handleOpen = async () => {
     if (!user || !openingCash) return;
@@ -72,8 +89,8 @@ export default function CashSession() {
       setOpeningCash("");
       setOpenNotes("");
       await fetchSessions();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Couldn't open a cash session.");
     } finally {
       setOpenLoading(false);
     }
@@ -83,22 +100,97 @@ export default function CashSession() {
     if (!openSession || !actualCash || !user) return;
     try {
       setCloseLoading(true);
-      // closingCash = expected cash (opening cash + cash received during the session)
-      const expectedCash = Number(openSession?.openingCash || 0) + Number(openSession?.totalCash || 0);
+      // Preview of expected cash for the receipt/print — the server
+      // recomputes this authoritatively from THIS session's own bills.
+      const expectedCash = liveExpectedCash;
+      const actual = Number(actualCash);
       await closeCashSession(openSession.id, {
         closedById:  user.id,
-        actualCash:  Number(actualCash),
+        actualCash:  actual,
         closingCash: expectedCash,
         notes:       closeNotes || undefined,
+      });
+      // Print the Z-report (final shift summary) using the numbers just
+      // submitted, before resetting the form clears them.
+      printShiftSummary({
+        isFinal: true,
+        openedAt: openSession.openedAt,
+        openedByName: openSession.openedBy?.name,
+        openingCash: openSession.openingCash,
+        expectedCash,
+        actualCash: actual,
+        notes: closeNotes,
+        shiftSummary,
       });
       setActualCash("");
       setCloseNotes("");
       await fetchSessions();
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Couldn't close this cash session.");
     } finally {
       setCloseLoading(false);
     }
+  };
+
+  // X-report (mid-shift, session still open) or Z-report (final, at close) —
+  // a physical summary staff can hand over or file, since the on-screen
+  // summary alone disappears once the shift ends.
+  const printShiftSummary = (data: {
+    isFinal: boolean;
+    openedAt: string;
+    openedByName?: string;
+    openingCash: number;
+    expectedCash?: number;
+    actualCash?: number;
+    notes?: string;
+    shiftSummary: any;
+  }) => {
+    const pw = window.open("", "", "width=400,height=600");
+    if (!pw) return;
+    const diff = data.actualCash != null && data.expectedCash != null
+      ? data.actualCash - data.expectedCash
+      : null;
+    const payRows = (data.shiftSummary?.paymentBreakdown || [])
+      .map((p: any) => `<tr><td>${p.method}</td><td style="text-align:right">₹${Number(p.amount).toLocaleString()}</td><td style="text-align:right">${p.count}</td></tr>`)
+      .join("");
+    pw.document.write(`<html><head><title>${data.isFinal ? "Z-Report" : "X-Report"}</title>
+<style>
+@page{size:80mm auto;margin:0}
+body{margin:0;padding:4px;font-family:monospace;color:black;background:white;font-size:12px}
+.c{text-align:center}.d{border-top:1px dashed black;margin:6px 0}
+table{width:100%;border-collapse:collapse}
+td{padding:2px 0;vertical-align:top}
+</style></head>
+<body onload="window.print();window.close();">
+<div class="c" style="margin-bottom:4px">
+  <div style="font-size:10px;font-weight:bold;letter-spacing:2px">${data.isFinal ? "Z-REPORT — SHIFT CLOSE" : "X-REPORT — SHIFT IN PROGRESS"}</div>
+  <div style="font-size:16px;font-weight:bold;margin-top:2px">${user?.restaurant?.name || user?.branch?.name || "DineInk"}</div>
+</div>
+<div class="d"></div>
+<table>
+  <tr><td>Opened</td><td style="text-align:right">${new Date(data.openedAt).toLocaleString("en-IN")}</td></tr>
+  <tr><td>Opened By</td><td style="text-align:right">${data.openedByName || "-"}</td></tr>
+  ${data.isFinal ? `<tr><td>Closed</td><td style="text-align:right">${new Date().toLocaleString("en-IN")}</td></tr>` : ""}
+</table>
+<div class="d"></div>
+<table>
+  <tr><td>Opening Cash</td><td style="text-align:right">₹${Number(data.openingCash).toLocaleString()}</td></tr>
+  ${data.expectedCash != null ? `<tr><td>Expected Cash</td><td style="text-align:right">₹${Number(data.expectedCash).toLocaleString()}</td></tr>` : ""}
+  ${data.actualCash != null ? `<tr><td>Actual Cash</td><td style="text-align:right">₹${Number(data.actualCash).toLocaleString()}</td></tr>` : ""}
+  ${diff != null ? `<tr><td><b>Difference</b></td><td style="text-align:right"><b>${diff >= 0 ? "+" : ""}₹${diff.toLocaleString()}</b></td></tr>` : ""}
+</table>
+${data.shiftSummary ? `<div class="d"></div>
+<table>
+  <tr><td>Total Revenue</td><td style="text-align:right">₹${Number(data.shiftSummary.totalRevenue).toLocaleString()}</td></tr>
+  <tr><td>Bills</td><td style="text-align:right">${data.shiftSummary.billCount}</td></tr>
+  <tr><td>Avg Bill</td><td style="text-align:right">₹${Math.round(data.shiftSummary.avgBillValue).toLocaleString()}</td></tr>
+</table>
+${payRows ? `<div class="d"></div><table><tr><td><b>Payment</b></td><td style="text-align:right"><b>Amount</b></td><td style="text-align:right"><b>#</b></td></tr>${payRows}</table>` : ""}` : ""}
+${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
+<div class="d"></div>
+<div class="c" style="font-size:10px;font-weight:bold">*** ${data.isFinal ? "END OF SHIFT" : "SHIFT STILL OPEN"} ***</div>
+</body></html>`);
+    pw.document.close();
   };
 
   const today = new Date().toLocaleDateString("en-IN", {
@@ -123,15 +215,40 @@ export default function CashSession() {
         </button>
       </div>
 
+      {/* Other cashiers' open sessions — each till is separate, this is informational */}
+      {otherOpenSessions.length > 0 && (
+        <div className="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+          <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+          <p className="text-[11px] font-semibold text-blue-700">
+            {otherOpenSessions.map((s) => s.openedBy?.name || "Someone").join(", ")}
+            {otherOpenSessions.length > 1 ? " also have" : " also has"} an open drawer right now.
+          </p>
+        </div>
+      )}
+
       {/* Current session status */}
       {openSession ? (
         <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-xs font-bold text-emerald-700">Session Open</p>
-            <span className="ml-auto text-[10px] text-emerald-600">
+            <span className="text-[10px] text-emerald-600">
               {new Date(openSession.openedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
             </span>
+            <button
+              onClick={() => printShiftSummary({
+                isFinal: false,
+                openedAt: openSession.openedAt,
+                openedByName: openSession.openedBy?.name,
+                openingCash: openSession.openingCash,
+                expectedCash: liveExpectedCash,
+                shiftSummary,
+              })}
+              title="Print X-Report (mid-shift summary)"
+              className="ml-auto flex h-6 w-6 items-center justify-center rounded-lg bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
+            >
+              <Printer className="h-3 w-3" />
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg bg-white border border-emerald-100 px-3 py-2">
@@ -201,14 +318,14 @@ export default function CashSession() {
               onChange={(e) => setCloseNotes(e.target.value)}
               className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
             />
-            {actualCash && openSession.expectedCash > 0 && (
+            {actualCash && liveExpectedCash > 0 && (
               <div className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold ${
-                Number(actualCash) >= openSession.expectedCash
+                Number(actualCash) >= liveExpectedCash
                   ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
                   : "bg-red-50 border border-red-200 text-red-700"
               }`}>
                 <AlertTriangle className="h-3 w-3 shrink-0" />
-                Expected ₹{Number(openSession.expectedCash).toLocaleString()} · Difference: ₹{(Number(actualCash) - openSession.expectedCash).toLocaleString()}
+                Expected ₹{liveExpectedCash.toLocaleString()} · Difference: ₹{(Number(actualCash) - liveExpectedCash).toLocaleString()}
               </div>
             )}
             <button

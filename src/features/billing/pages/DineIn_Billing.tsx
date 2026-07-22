@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import {
   saveRunningOrder,
@@ -6,6 +7,7 @@ import {
   updateRunningOrderStatus,
   closeRunningOrder,
   requestItemCancel,
+  transferTable,
 } from "@/services/runningOrderService";
 import MenuSection from "@/components/billing/MenuSection";
 import CustomerSection from "@/components/billing/CustomerSection";
@@ -14,7 +16,11 @@ import {
   createRestaurantTable,
   deleteRestaurantTable,
 } from "@/services/restaurantTableService";
+import { createBill } from "@/services/billService";
 import { Settings, ArrowLeft, X, Minus, Plus, Printer } from "lucide-react";
+import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { getQueuedItemsForTable, removeQueuedOrdersForTable, isNetworkError } from "@/utils/offlineQueue";
+import { printReceiptWithSplit, type BillData } from "@/utils/printer";
 
 type Props = {
   step: string;
@@ -61,14 +67,18 @@ export default function DineIn({
   const { user } = useAppSelector((state) => state.auth);
   const [showModifyTables, setShowModifyTables] = useState(false);
   const [floorAction, setFloorAction] = useState<
-    "HOME" | "SUB_TABLE" | "MERGE"
+    "HOME" | "SUB_TABLE" | "MERGE" | "TRANSFER"
   >("HOME");
   const [selectedParentTable, setSelectedParentTable] = useState<any>(null);
   const [tempTableName, setTempTableName] = useState("");
   const [tempCapacity, setTempCapacity] = useState("");
   const [mergeTables, setMergeTables] = useState<any[]>([]);
+  const [transferFrom, setTransferFrom] = useState<any>(null);
+  const [transferTo, setTransferTo] = useState<any>(null);
+  const [transferring, setTransferring] = useState(false);
 
   const canCheckout = user?.role === "MANAGER" || user?.role === "CASHIER";
+  const isOnline = useOnlineStatus();
 
   // Safety net: STAFF cannot reach the CUSTOMER (billing) step
   useEffect(() => {
@@ -181,6 +191,16 @@ export default function DineIn({
         orderType: "DINE_IN",
       });
       if (response.success) {
+        if (response.queuedOffline) {
+          toast(
+            "No connection — order saved offline, will sync automatically. Printing a kitchen copy now.",
+            { icon: "📴", duration: 5000 },
+          );
+          printOfflineKOT(
+            cartItems.map((item) => ({ name: item.name, quantity: cart[item.id] })),
+            selectedTable.name,
+          );
+        }
         setCart({});
                           setCartNotes({});
                           setCartAddOns({});
@@ -209,43 +229,192 @@ export default function DineIn({
     setStep("CUSTOMER");
   };
 
+  const resetAfterBill = async () => {
+    setCart({});
+    setCartNotes({});
+    setCartAddOns({});
+    setTableOrders([]);
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerAddress("");
+    setSelectedTable(null);
+    setStep("MENU");
+    await fetchData();
+  };
+
+  // Offline (or the "online" attempt just hit a genuine network error) —
+  // build the bill directly from items already known locally (tableOrders is
+  // already fetched into state), so it doesn't depend on the server having
+  // this table's running orders. Also folds in any of this table's KOTs
+  // still sitting in the offline queue (placed this same offline session,
+  // never confirmed by the server) — otherwise a bill made right after an
+  // offline order-save would miss the very items that order just added.
+  const generateBillOffline = async (billingData: any) => {
+    const activeItems = tableOrders
+      .flatMap((o: any) => o.batches?.flatMap((b: any) => b.items) ?? [])
+      .filter((i: any) => i.status !== "CANCELLED");
+    const billItems = activeItems.map((i: any) => ({
+      menuItemId: i.menuItemId,
+      itemName: i.itemName,
+      quantity: i.quantity,
+      price: i.price,
+      total: i.total,
+      notes: i.notes,
+      addOns: i.addOns,
+    }));
+    const queuedItems = getQueuedItemsForTable(selectedTable.id).map((i: any) => {
+      const addOnTotal = (i.addOns || []).reduce((s: number, a: any) => s + (Number(a.price) || 0), 0);
+      return {
+        menuItemId: i.menuItemId,
+        itemName: i.itemName,
+        quantity: i.quantity,
+        price: i.price,
+        total: i.quantity * (i.price + addOnTotal),
+        notes: i.notes,
+        addOns: i.addOns,
+      };
+    });
+    billItems.push(...queuedItems);
+
+    const receiptMeta: Omit<BillData, "billNo"> = {
+      shopName: branchData?.name || user?.restaurant?.name || "Restaurant",
+      shopAddress: branchData?.address || user?.branch?.address,
+      shopGstin: user?.restaurant?.gstNumber || user?.branch?.gstNumber,
+      customerName: customerName || "Walk-in",
+      billingType: "DINE_IN",
+      paymentMethod: billingData.paymentMethod,
+      items: billItems.map((i: any) => ({
+        itemName: i.itemName, quantity: i.quantity, price: i.price,
+        notes: i.notes, addOns: i.addOns,
+      })),
+      subtotal: billingData.subtotal,
+      discountAmount: billingData.discountAmount,
+      cgst: billingData.cgst,
+      sgst: billingData.sgst,
+      serviceChargeAmount: billingData.serviceChargeAmount,
+      packingCharge: billingData.packingCharge,
+      grandTotal: billingData.grandTotal,
+      tipAmount: billingData.tipAmount,
+    };
+
+    const response = await createBill(
+      {
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+        createdById: user.id,
+        tableId: selectedTable.id,
+        customerName,
+        customerPhone,
+        paymentMethod: billingData.paymentMethod,
+        orderType: "DINE_IN",
+        items: billItems,
+        subtotal: billingData.subtotal,
+        discount: billingData.discountAmount,
+        packingCharge: billingData.packingCharge,
+        serviceCharge: billingData.serviceChargeAmount,
+        gst: billingData.gstAmount,
+        cgst: billingData.cgst,
+        sgst: billingData.sgst,
+        total: billingData.grandTotal,
+        tipAmount: billingData.tipAmount,
+      },
+      receiptMeta,
+    );
+
+    if (response.success) {
+      // This bill's items already include anything from this table's
+      // queued-but-unsynced KOTs (folded in above) — remove them so they
+      // don't also sync later as a separate, already-billed duplicate.
+      removeQueuedOrdersForTable(selectedTable.id);
+      if (response.queuedOffline) {
+        toast(
+          `No connection — bill saved offline as ${response.provisionalBillNo}. The official invoice will print automatically once this syncs.`,
+          { icon: "📴", duration: 6000 },
+        );
+        if (billingData.shouldPrint) {
+          const printed = await printReceiptWithSplit(
+            { ...receiptMeta, billNo: response.provisionalBillNo! },
+            billingData.splitCount || 1,
+          );
+          if (!printed) toast.error("Print failed — check the printer connection.");
+        }
+      }
+      await resetAfterBill();
+    }
+  };
+
   // Close all running orders for this table and generate the bill
   const handleGenerateBill = async (billingData: any) => {
     if (!selectedTable || submitting) return;
     setSubmitting(true);
     try {
-      const response = await closeRunningOrder({
-        tableId: selectedTable.id,
-        restaurantId: user.restaurantId,
-        branchId: user.branchId,
-        customerName,
-        customerPhone,
-        customerAddress,
-        paymentMethod: billingData.paymentMethod,
-        orderType: "DINE_IN",
-        subtotal: billingData.subtotal,
-        discountAmount: billingData.discountAmount,
-        packingCharge: billingData.packingCharge,
-        serviceCharge: billingData.serviceChargeAmount,
-        gstAmount: billingData.gstAmount,
-        cgst: billingData.cgst,
-        sgst: billingData.sgst,
-        finalAmount: billingData.grandTotal,
-      });
-      if (response.success) {
-        setCart({});
-                          setCartNotes({});
-                          setCartAddOns({});
-        setTableOrders([]);
-        setCustomerName("");
-        setCustomerPhone("");
-        setCustomerAddress("");
-        setSelectedTable(null);
-        setStep("MENU");
-        await fetchData();
+      // isOnline (navigator.onLine) is only ever a hint — it can be true
+      // while the network is still unusable (captive portal, router up but
+      // no upstream). So the "online" attempt still falls back to the same
+      // offline path on a genuine network failure, instead of just erroring
+      // and losing the bill.
+      if (isOnline) {
+        try {
+          const response = await closeRunningOrder({
+            tableId: selectedTable.id,
+            restaurantId: user.restaurantId,
+            branchId: user.branchId,
+            customerName,
+            customerPhone,
+            customerAddress,
+            paymentMethod: billingData.paymentMethod,
+            orderType: "DINE_IN",
+            subtotal: billingData.subtotal,
+            discountAmount: billingData.discountAmount,
+            packingCharge: billingData.packingCharge,
+            serviceCharge: billingData.serviceChargeAmount,
+            gstAmount: billingData.gstAmount,
+            cgst: billingData.cgst,
+            sgst: billingData.sgst,
+            finalAmount: billingData.grandTotal,
+            tipAmount: billingData.tipAmount,
+          });
+          if (response.success) {
+            if (billingData.shouldPrint && response.data) {
+              const printed = await printReceiptWithSplit(
+                {
+                  shopName: branchData?.name || user?.restaurant?.name || "Restaurant",
+                  shopAddress: branchData?.address || user?.branch?.address,
+                  shopGstin: user?.restaurant?.gstNumber || user?.branch?.gstNumber,
+                  billNo: response.data.billNo,
+                  customerName: customerName || "Walk-in",
+                  billingType: "DINE_IN",
+                  paymentMethod: billingData.paymentMethod,
+                  items: (response.data.items || []).map((i: any) => ({
+                    itemName: i.itemName, quantity: i.quantity, price: i.price,
+                    notes: i.notes, addOns: i.addOns,
+                  })),
+                  subtotal: billingData.subtotal,
+                  discountAmount: billingData.discountAmount,
+                  cgst: billingData.cgst,
+                  sgst: billingData.sgst,
+                  serviceChargeAmount: billingData.serviceChargeAmount,
+                  packingCharge: billingData.packingCharge,
+                  grandTotal: billingData.grandTotal,
+                  tipAmount: billingData.tipAmount,
+                },
+                billingData.splitCount || 1,
+              );
+              if (!printed) toast.error("Print failed — check the printer connection.");
+            }
+            await resetAfterBill();
+          }
+          return;
+        } catch (err: any) {
+          if (!isNetworkError(err)) throw err;
+          // Genuine network failure despite isOnline===true — fall through
+          // to the offline path below instead of losing this bill.
+        }
       }
+
+      await generateBillOffline(billingData);
     } catch {
-      /* silent */
+      toast.error("Couldn't generate the bill — please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -306,6 +475,47 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
     pw.document.close();
   };
 
+  // Printed when an order is queued offline — the kitchen's own screen won't
+  // see it until this device reconnects and syncs, so this is the only
+  // physical ticket the kitchen gets in the meantime. Clearly marked so
+  // nobody mistakes it for a normal KOT with a real order number.
+  const printOfflineKOT = (items: any[], tableName: string) => {
+    const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const pw = window.open("", "", "width=400,height=600");
+    if (!pw) return;
+    pw.document.write(`<html><head><title>OFFLINE KOT</title>
+<style>
+@page{size:80mm auto;margin:0}
+body{margin:0;padding:4px;font-family:monospace;color:black;background:white}
+.c{text-align:center}.d{border-top:1px dashed black;margin:6px 0}
+table{width:100%;border-collapse:collapse}
+td{font-size:12px;padding:2px 0;vertical-align:top}
+.n{width:70%}.q{width:30%;text-align:right;font-weight:bold;font-size:15px}
+@media print{@page{size:80mm auto;margin:0}body{width:72mm}}
+</style></head>
+<body onload="window.print();window.close();">
+<div class="c" style="margin-bottom:4px">
+  <div style="font-size:10px;font-weight:bold;letter-spacing:2px">*** OFFLINE — NOT YET SYNCED ***</div>
+  <div style="font-size:18px;font-weight:bold;margin-top:2px">${branchData?.name || "DineInk"}</div>
+</div>
+<div class="d"></div>
+<table>
+  <tr><td><b>Table</b></td><td style="text-align:right;font-size:16px;font-weight:bold">${tableName}</td></tr>
+  <tr><td>Type</td><td style="text-align:right">DINE IN</td></tr>
+  <tr><td>Time</td><td style="text-align:right">${time}</td></tr>
+</table>
+<div class="d"></div>
+<table><tr><td class="n" style="font-size:11px;font-weight:bold">ITEM</td><td class="q" style="font-size:11px">QTY</td></tr></table>
+<div class="d" style="margin:3px 0"></div>
+<table><tbody>
+${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bold;padding:3px 0">${i.name}</td><td class="q" style="font-size:18px">${i.quantity}</td></tr>`).join("")}
+</tbody></table>
+<div class="d"></div>
+<div class="c" style="font-size:11px;font-weight:bold">*** KITCHEN COPY — WILL APPEAR ON KDS ONCE ONLINE ***</div>
+</body></html>`);
+    pw.document.close();
+  };
+
   const handleCreateSubTable = async () => {
     if (!selectedParentTable || !tempTableName) return;
     await createRestaurantTable({
@@ -340,6 +550,34 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
     setMergeTables([]);
     setFloorAction("HOME");
     await fetchData();
+  };
+
+  const handleTransferTable = async () => {
+    if (!transferFrom || !transferTo) return;
+    setTransferring(true);
+    try {
+      const res = await transferTable({
+        fromTableId: transferFrom.id,
+        toTableId: transferTo.id,
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+      });
+      if (res.success) {
+        toast.success(`Moved ${transferFrom.name} to ${transferTo.name}`);
+        setTransferFrom(null);
+        setTransferTo(null);
+        setFloorAction("HOME");
+        setShowModifyTables(false);
+        if (selectedTable?.id === transferFrom.id) setSelectedTable(null);
+        await fetchData();
+      } else {
+        toast.error(res.message || "Couldn't transfer the table.");
+      }
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Couldn't transfer the table.");
+    } finally {
+      setTransferring(false);
+    }
   };
 
   const getTableColorState = (
@@ -699,6 +937,26 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     </div>
                   </button>
 
+                  <button
+                    onClick={() => setFloorAction("TRANSFER")}
+                    className="w-full rounded-xl border border-blue-100 bg-gradient-to-br from-white to-blue-50 p-3 text-left transition hover:shadow-lg"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-wide text-blue-500">
+                          Guests Moved Seats
+                        </p>
+                        <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                          Transfer Table
+                        </h3>
+                        <p className="text-[10px] text-gray-500">
+                          Move an active order to another table
+                        </p>
+                      </div>
+                      <span className="text-2xl">🔄</span>
+                    </div>
+                  </button>
+
                   {/* TEMP TABLES LIST */}
                   <div className="pt-1">
                     <div className="mb-2 flex items-center justify-between">
@@ -908,6 +1166,88 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     className="mt-3 h-9 w-full rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-xs font-black text-white shadow-lg transition active:scale-[0.99]"
                   >
                     Create Merge Table
+                  </button>
+                </div>
+              )}
+
+              {/* TRANSFER */}
+              {floorAction === "TRANSFER" && (
+                <div>
+                  <button
+                    onClick={() => {
+                      setFloorAction("HOME");
+                      setTransferFrom(null);
+                      setTransferTo(null);
+                    }}
+                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm"
+                  >
+                    <ArrowLeft className="h-3.5 w-3.5" /> Back
+                  </button>
+                  <label className="mb-1.5 block text-xs font-black text-gray-700">
+                    Move From (occupied table)
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {tables
+                      .filter((t) => !t.isTemporary && getTableColorState(t.id) !== "available")
+                      .map((table) => (
+                        <button
+                          key={table.id}
+                          onClick={() => setTransferFrom(table)}
+                          className={`rounded-lg border p-2.5 text-left transition ${transferFrom?.id === table.id ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                        >
+                          <h4 className="text-sm font-black text-gray-900">
+                            {table.name}
+                          </h4>
+                          <p className="text-[10px] text-gray-500">
+                            {table.capacity} seats
+                          </p>
+                        </button>
+                      ))}
+                  </div>
+                  {tables.filter((t) => !t.isTemporary && getTableColorState(t.id) !== "available").length === 0 && (
+                    <p className="mt-2 text-[11px] text-gray-400">
+                      No occupied tables to transfer right now.
+                    </p>
+                  )}
+
+                  <label className="mb-1.5 mt-4 block text-xs font-black text-gray-700">
+                    Move To (available table)
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {tables
+                      .filter((t) => !t.isTemporary && t.id !== transferFrom?.id && getTableColorState(t.id) === "available")
+                      .map((table) => (
+                        <button
+                          key={table.id}
+                          onClick={() => setTransferTo(table)}
+                          className={`rounded-lg border p-2.5 text-left transition ${transferTo?.id === table.id ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                        >
+                          <h4 className="text-sm font-black text-gray-900">
+                            {table.name}
+                          </h4>
+                          <p className="text-[10px] text-gray-500">
+                            {table.capacity} seats
+                          </p>
+                        </button>
+                      ))}
+                  </div>
+
+                  {transferFrom && transferTo && (
+                    <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
+                      <p className="text-[9px] font-black uppercase tracking-wide text-blue-600">
+                        Preview
+                      </p>
+                      <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                        {transferFrom.name} → {transferTo.name}
+                      </h3>
+                    </div>
+                  )}
+                  <button
+                    onClick={handleTransferTable}
+                    disabled={!transferFrom || !transferTo || transferring}
+                    className="mt-3 h-9 w-full rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 text-xs font-black text-white shadow-lg transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {transferring ? "Transferring…" : "Transfer Table"}
                   </button>
                 </div>
               )}

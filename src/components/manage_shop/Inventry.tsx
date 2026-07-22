@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { useAppSelector } from "@/store/hooks";
 
@@ -49,6 +50,7 @@ export default function Inventory() {
       await fetchData();
     } catch (error) {
       console.log(error);
+      toast.error("Couldn't delete this adjustment — please try again.");
     } finally {
       setLoading(false);
     }
@@ -102,10 +104,19 @@ export default function Inventory() {
       await fetchData();
     } catch (error) {
       console.log(error);
+      toast.error("Couldn't save this adjustment — please try again.");
     } finally {
       setLoading(false);
     }
   };
+  const lowStockIngredients = useMemo(
+    () =>
+      ingredients.filter(
+        (ing: any) => ing.reorderLevel != null && Number(ing.quantity || 0) <= Number(ing.reorderLevel),
+      ),
+    [ingredients],
+  );
+
   const filteredInventory = useMemo(() => {
     setCurrentPage(1);
 
@@ -186,6 +197,7 @@ export default function Inventory() {
       setIngredients(ingredientRes.data || []);
     } catch (error) {
       console.log(error);
+      toast.error("Couldn't load inventory — check your connection.");
     } finally {
       setLoading(false);
     }
@@ -243,6 +255,28 @@ export default function Inventory() {
               </div>
             </div>
           </div>
+
+          {/* LOW STOCK BANNER */}
+          {lowStockIngredients.length > 0 && (
+            <div className="mx-5 mt-4 shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <span className="text-sm">⚠️</span>
+                <p className="text-xs font-bold text-amber-800">
+                  {lowStockIngredients.length} ingredient{lowStockIngredients.length > 1 ? "s" : ""} at or below reorder level
+                </p>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {lowStockIngredients.map((ing: any) => (
+                  <span
+                    key={ing.id}
+                    className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800"
+                  >
+                    {ing.name}: {ing.quantity ?? 0} {ing.unit || ""} left
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* TABLE AREA */}
           <div className="flex-1 overflow-auto min-h-0">

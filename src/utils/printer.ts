@@ -201,6 +201,11 @@ export type BillData = {
   serviceChargeAmount: number;
   packingCharge: number;
   grandTotal: number;
+  tipAmount?: number;
+  // Present only when this copy is one of several printed for a bill split
+  // between guests — the underlying invoice/billNo is the same on every
+  // copy, this just marks which guest's share this particular printout is.
+  splitInfo?: { index: number; count: number; perPerson: number };
 };
 
 // ─── ESC/POS receipt builder ──────────────────────────────────────────────────
@@ -330,6 +335,13 @@ function buildReceipt(bill: BillData): string {
       `Rs.${bill.packingCharge.toFixed(2)}`,
     );
 
+  if (bill.tipAmount && bill.tipAmount > 0)
+    r += padded(
+      "Tip",
+
+      `Rs.${bill.tipAmount.toFixed(2)}`,
+    );
+
   r += divider("=");
 
   /* ---------- TOTAL ---------- */
@@ -339,12 +351,21 @@ function buildReceipt(bill: BillData): string {
   r += padded(
     "TOTAL",
 
-    `Rs.${bill.grandTotal.toFixed(2)}`,
+    `Rs.${(bill.grandTotal + (bill.tipAmount || 0)).toFixed(2)}`,
   );
 
   r += CMD.init;
 
   r += divider("=");
+
+  if (bill.splitInfo) {
+    r += CMD.boldOn;
+    r += CMD.center;
+    r += ln(`Guest ${bill.splitInfo.index} of ${bill.splitInfo.count}`);
+    r += ln(`Pays: Rs.${bill.splitInfo.perPerson.toFixed(2)}`);
+    r += CMD.init;
+    r += divider("=");
+  }
 
   /* ---------- FOOTER ---------- */
 
@@ -581,6 +602,9 @@ function printReceiptBrowser(bill: BillData): void {
     bill.packingCharge > 0
       ? drow("Packing Charge", `&#8377;${bill.packingCharge.toFixed(2)}`)
       : "",
+    bill.tipAmount && bill.tipAmount > 0
+      ? drow("Tip", `&#8377;${bill.tipAmount.toFixed(2)}`)
+      : "",
   ].join("");
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -654,7 +678,8 @@ ${itemRows}
 ${drow("Subtotal", `&#8377;${bill.subtotal.toFixed(2)}`)}
 ${extraRows}
 <div class="ds"></div>
-<div class="totrow"><span>TOTAL</span><span>&#8377;${bill.grandTotal.toFixed(2)}</span></div>
+<div class="totrow"><span>TOTAL</span><span>&#8377;${(bill.grandTotal + (bill.tipAmount || 0)).toFixed(2)}</span></div>
+${bill.splitInfo ? `<div class="ds"></div><div class="totrow" style="font-size:13px"><span>Guest ${bill.splitInfo.index} of ${bill.splitInfo.count}</span><span>Pays &#8377;${bill.splitInfo.perPerson.toFixed(2)}</span></div>` : ""}
 <div class="ds"></div>
 <div class="foot">
 
@@ -710,4 +735,28 @@ export async function printReceipt(bill: BillData): Promise<boolean> {
     return printBluetooth(config.address, buildReceipt(bill));
   }
   return false;
+}
+
+// Prints one copy per guest when the bill is split, each annotated with
+// their share — the underlying invoice (billNo) is identical on every copy;
+// this is purely a payment-collection aid, not N separate invoices. Prints
+// a single normal copy when splitCount <= 1. Sequential (not parallel) since
+// a physical printer can only run one job at a time. Returns false if any
+// copy fails.
+export async function printReceiptWithSplit(
+  bill: Omit<BillData, "splitInfo">,
+  splitCount: number,
+): Promise<boolean> {
+  if (splitCount <= 1) return printReceipt(bill);
+
+  const perPerson = (bill.grandTotal + (bill.tipAmount || 0)) / splitCount;
+  let allOk = true;
+  for (let i = 1; i <= splitCount; i++) {
+    const ok = await printReceipt({
+      ...bill,
+      splitInfo: { index: i, count: splitCount, perPerson },
+    });
+    if (!ok) allOk = false;
+  }
+  return allOk;
 }

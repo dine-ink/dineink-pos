@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Coffee, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import {
-  endBreak,
   getTodayAttendance,
   loginAttendance,
   logoutAttendance,
-  startBreak,
+  type AttendanceRow,
 } from "@/services/attendanceService";
 
 const todayDate = new Date().toLocaleDateString("en-GB", {
@@ -16,33 +16,53 @@ const todayDate = new Date().toLocaleDateString("en-GB", {
 });
 
 export default function Attendance() {
-  const [employees, setEmployees] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<AttendanceRow[]>([]);
   const [search, setSearch] = useState("");
   const { user } = useAppSelector((state) => state.auth);
   const branchId = user?.branchId;
 
   const filteredEmployees = useMemo(() => {
-    return employees?.filter((employee: any) =>
+    return employees.filter((employee) =>
       employee.name.toLowerCase().includes(search.toLowerCase()),
     );
   }, [employees, search]);
 
   const fetchData = async () => {
     try {
-      // setLoading(true);
-      const data = await getTodayAttendance(branchId);
-
+      const data = await getTodayAttendance(branchId!);
       setEmployees(data.data || []);
     } catch (error) {
       console.log(error);
-    } finally {
-      // setLoading(false);
+      toast.error("Couldn't load attendance — check your connection.");
     }
   };
 
   useEffect(() => {
     if (branchId) fetchData();
   }, [branchId]);
+
+  const handleToggleLogin = async (employee: AttendanceRow) => {
+    try {
+      if (employee.status) {
+        await logoutAttendance(employee.attendanceId!);
+      } else {
+        await loginAttendance({
+          userId: employee.id,
+          restaurantId: employee.restaurantId,
+          branchId: employee.branchId,
+        });
+      }
+      await fetchData();
+    } catch (error) {
+      console.log(error);
+      toast.error(
+        employee.status
+          ? "Couldn't log out — please try again."
+          : "Couldn't log in — please try again.",
+      );
+    }
+  };
+
   return (
     <div className="w-full h-full  p-2">
       <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
@@ -89,54 +109,28 @@ export default function Attendance() {
 
                 <th className="p-4 text-sm font-bold">Logout Time</th>
 
-                <th className="p-4 text-sm font-bold">Break Time</th>
-
                 <th className="p-4 text-sm font-bold">Total Time</th>
-
-                <th className="p-4 text-sm font-bold">Break</th>
               </tr>
             </thead>
 
             {/* TABLE BODY */}
             <tbody>
-              {filteredEmployees?.map((employee: any) => (
+              {filteredEmployees.map((employee) => (
                 <tr
                   key={employee.id}
                   className="border-b border-gray-100 hover:bg-gray-50 transition-all"
                 >
                   {/* NAME */}
                   <td className="p-4">
-                    <div>
-                      <h2 className=" text-slate-1000 text-sm">
-                        {employee.name}
-                      </h2>
-                      {/* 
-                      <p className="text-gray-500 text-sm">
-                        {employee.role}
-                      </p> */}
-                    </div>
+                    <h2 className=" text-slate-1000 text-sm">
+                      {employee.name}
+                    </h2>
                   </td>
 
                   {/* LOGIN STATUS */}
                   <td className="p-4">
                     <button
-                      onClick={async () => {
-                        try {
-                          if (employee.status) {
-                            await logoutAttendance(employee.attendanceId);
-                          } else {
-                            await loginAttendance({
-                              userId: employee.id,
-                              restaurantId: employee.restaurantId,
-                              branchId: employee.branchId,
-                            });
-                          }
-
-                          await fetchData();
-                        } catch (error) {
-                          console.log(error);
-                        }
-                      }}
+                      onClick={() => handleToggleLogin(employee)}
                       className={`px-4 py-2 rounded-lg text-sm font-semibold ${
                         employee.status
                           ? "bg-red-100 text-red-600"
@@ -173,73 +167,15 @@ export default function Attendance() {
                       : "-"}
                   </td>
 
-                  {/* BREAK TIME */}
-                  <td className="p-4 text-slate-1000 text-sm">
-                    {employee.breakTime || 0} mins
-                  </td>
-
                   {/* TOTAL TIME */}
                   <td className="p-4 text-slate-1000 text-sm">
                     {employee.totalHours ? `${employee.totalHours} hrs` : "-"}
-                  </td>
-
-                  {/* BREAK BUTTON */}
-                  <td className="p-4">
-                    <button
-                      disabled={!employee.attendanceId}
-                      onClick={async () => {
-                        try {
-                          if (!employee.attendanceId) {
-                            return;
-                          }
-
-                          if (employee.onBreak) {
-                            await endBreak(employee.attendanceId);
-                          } else {
-                            await startBreak(employee.attendanceId);
-                          }
-
-                          await fetchData();
-                        } catch (error) {
-                          console.log(error);
-                        }
-                      }}
-                      className={`border ${
-                        employee.onBreak
-                          ? "border-red-300 text-red-500"
-                          : "border-green-300 text-green-500"
-                      } px-4 py-2 rounded-xl flex items-center gap-2 hover:bg-red-50 transition-all disabled:opacity-50`}
-                    >
-                      <Coffee size={16} />
-                      {employee.onBreak ? "End Break" : "Start Break"}
-                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-
-        {/* PAGINATION */}
-        {/* <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mt-6">
-          <p className="text-gray-600 font-medium">
-            Showing 1 to {filteredEmployees.length} of {employees.length} entries
-          </p>
-
-          <div className="flex items-center gap-3">
-            <button className="h-10 w-10 rounded-lg border border-gray-200 text-gray-500">
-              ←
-            </button>
-
-            <button className="h-10 w-10 rounded-lg bg-red-600 text-white font-semibold">
-              1
-            </button>
-
-            <button className="h-10 w-10 rounded-lg border border-gray-200 text-gray-500">
-              →
-            </button>
-          </div>
-        </div> */}
       </div>
     </div>
   );

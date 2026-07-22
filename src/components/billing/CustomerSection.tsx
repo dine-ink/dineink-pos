@@ -24,6 +24,9 @@ export default function CustomerSection({
   const [roundOff, setRoundOff] = useState(true);
   const [applyServiceCharge, setApplyServiceCharge] = useState(true);
   const [cashReceived, setCashReceived] = useState("");
+  const [tipAmount, setTipAmount] = useState(0);
+  const tipsEnabled = billing?.enableTips ?? false;
+  const [splitCount, setSplitCount] = useState(1);
   const [paymentMethod, setPaymentMethod] = useState(
     billing.paymentMethods?.[0]?.toLowerCase() || "",
   );
@@ -51,7 +54,15 @@ export default function CustomerSection({
   // When inclusive, GST is already in taxableAmount — don't add again
   const totalBeforeRoundOff = isGSTInclusive ? taxableAmount : taxableAmount + gstAmount;
   const grandTotal = roundOff ? Math.round(totalBeforeRoundOff) : totalBeforeRoundOff;
-  const balance = grandTotal - (Number(cashReceived) || 0);
+  // Tip is deliberately kept out of grandTotal — it isn't restaurant revenue,
+  // it's a pass-through to staff. finalPayable is what the guest actually
+  // hands over; grandTotal (untouched) is still what gets taxed/reported.
+  const finalPayable = grandTotal + tipAmount;
+  const balance = finalPayable - (Number(cashReceived) || 0);
+  // Split is for payment collection only — one real invoice still gets
+  // created (same GST bill number for everyone); this just tells the group
+  // how much each person owes so they can settle between themselves.
+  const perPersonAmount = splitCount > 1 ? finalPayable / splitCount : finalPayable;
 
   useEffect(() => {
     if (paymentMethods.length > 0) setPaymentMethod(paymentMethods[0].toLowerCase());
@@ -195,11 +206,84 @@ export default function CustomerSection({
               {/* TOTAL PAYABLE */}
               <div className="rounded-xl bg-gradient-to-br from-red-500 to-rose-600 p-4 text-white shadow-lg shadow-red-200">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">Total Payable</p>
-                <h1 className="mt-1 text-4xl font-black">₹{grandTotal.toFixed(0)}</h1>
+                <h1 className="mt-1 text-4xl font-black">₹{finalPayable.toFixed(0)}</h1>
+                {tipAmount > 0 && (
+                  <p className="mt-1 text-[11px] text-red-100">₹{grandTotal.toFixed(0)} bill + ₹{tipAmount.toFixed(0)} tip</p>
+                )}
+                {splitCount > 1 && (
+                  <p className="mt-1 text-[11px] text-red-100">Split {splitCount} ways · ₹{perPersonAmount.toFixed(0)} per person</p>
+                )}
                 {balance > 0 && cashReceived && (
                   <p className="mt-1 text-xs text-red-100">Balance: ₹{balance.toFixed(2)}</p>
                 )}
               </div>
+
+              {/* SPLIT BILL */}
+              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                <h3 className="mb-2 text-xs font-black text-gray-900">Split Bill</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSplitCount((n) => Math.max(1, n - 1))}
+                    disabled={splitCount <= 1}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
+                  >
+                    −
+                  </button>
+                  <div className="flex-1 text-center">
+                    <p className="text-sm font-black text-gray-900">
+                      {splitCount === 1 ? "No split" : `${splitCount} ways`}
+                    </p>
+                    {splitCount > 1 && (
+                      <p className="text-[10px] text-gray-500">₹{perPersonAmount.toFixed(2)} each</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSplitCount((n) => Math.min(20, n + 1))}
+                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 text-gray-600"
+                  >
+                    +
+                  </button>
+                </div>
+                {splitCount > 1 && (
+                  <p className="mt-2 text-[10px] text-gray-400">
+                    One invoice is generated as usual — this only prints {splitCount} copies showing each person's share.
+                  </p>
+                )}
+              </div>
+
+              {/* TIP */}
+              {tipsEnabled && (
+                <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                  <h3 className="mb-2 text-xs font-black text-gray-900">Add Tip</h3>
+                  <div className="flex items-center gap-1.5">
+                    {[0, 5, 10, 15].map((pct) => {
+                      const amount = pct === 0 ? 0 : Math.round((grandTotal * pct) / 100);
+                      const active = pct === 0 ? tipAmount === 0 : tipAmount === amount;
+                      return (
+                        <button
+                          key={pct}
+                          onClick={() => setTipAmount(amount)}
+                          className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-bold transition ${
+                            active ? "border-red-400 bg-red-50 text-red-600" : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                          }`}
+                        >
+                          {pct === 0 ? "None" : `${pct}%`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-2 flex h-8 items-center rounded-lg border border-gray-200 bg-gray-50 px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
+                    <span className="mr-1 text-xs font-bold text-gray-700">₹</span>
+                    <input
+                      type="number"
+                      value={tipAmount || ""}
+                      onChange={(e) => setTipAmount(Number(e.target.value) || 0)}
+                      placeholder="Custom tip amount"
+                      className="flex-1 bg-transparent text-xs outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* PAYMENT METHOD */}
               <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
@@ -257,7 +341,7 @@ export default function CustomerSection({
               {/* CONFIRM — desktop */}
               <div className="hidden xl:flex gap-2">
                 <button
-                  onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
+                  onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
                   disabled={loading}
                   className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 transition hover:bg-gray-50 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -265,7 +349,7 @@ export default function CustomerSection({
                   {loading ? "..." : "Confirm"}
                 </button>
                 <button
-                  onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
+                  onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
                   disabled={loading}
                   className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
@@ -281,7 +365,7 @@ export default function CustomerSection({
       {/* MOBILE CONFIRM */}
       <div className="xl:hidden shrink-0 border-t border-gray-100 bg-white p-2.5 flex gap-2">
         <button
-          onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
+          onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
           disabled={loading}
           className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
         >
@@ -289,12 +373,12 @@ export default function CustomerSection({
           {loading ? "..." : "Confirm"}
         </button>
         <button
-          onClick={() => onConfirm({ paymentMethod, grandTotal, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
+          onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
           disabled={loading}
           className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <Printer className="h-4 w-4" />
-          {loading ? "Placing..." : `Print · ₹${grandTotal.toFixed(0)}`}
+          {loading ? "Placing..." : `Print · ₹${finalPayable.toFixed(0)}`}
         </button>
       </div>
     </div>

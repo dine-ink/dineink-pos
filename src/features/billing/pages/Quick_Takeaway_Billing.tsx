@@ -3,6 +3,7 @@ import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
 import AddOnSelectorModal from "@/components/billing/AddOnSelectorModal";
 import { useMemo, useState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import { saveRunningOrder } from "@/services/runningOrderService";
 import { PauseCircle, Play } from "lucide-react";
@@ -205,26 +206,48 @@ export default function NormalBilling({
         customerPhone,
         customerAddress,
         items,
+        subtotal: grandTotal,
+        discountAmount: billingData.discountAmount,
+        packingCharge: billingData.packingCharge,
+        serviceCharge: billingData.serviceChargeAmount,
+        gstAmount: billingData.gstAmount,
+        cgst: billingData.cgst,
+        sgst: billingData.sgst,
+        finalAmount: billingData.grandTotal,
+        tipAmount: billingData.tipAmount,
       });
       if (!saveResponse.success) return;
 
-      if (billingData.shouldPrint) printReceipt({
-        shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
-        shopAddress: branchData?.address || user?.branch?.address,
-        shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
-        billNo: `KOT-${saveResponse.data?.id ?? Date.now()}`,
-        customerName,
-        billingType,
-        paymentMethod: billingData.paymentMethod,
-        items,
-        subtotal: grandTotal,
-        discountAmount: billingData.discountAmount,
-        cgst: billingData.cgst,
-        sgst: billingData.sgst,
-        serviceChargeAmount: billingData.serviceChargeAmount,
-        packingCharge: billingData.packingCharge,
-        grandTotal: billingData.grandTotal,
-      });
+      if (saveResponse.queuedOffline) {
+        toast(
+          "No connection — order saved offline, will sync automatically once reconnected.",
+          { icon: "📴", duration: 5000 },
+        );
+      }
+
+      if (billingData.shouldPrint) {
+        const printed = await printReceipt({
+          shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
+          shopAddress: branchData?.address || user?.branch?.address,
+          shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
+          billNo: saveResponse.queuedOffline
+            ? "PENDING — NOT YET SYNCED"
+            : `KOT-${saveResponse.data?.id ?? Date.now()}`,
+          customerName,
+          billingType,
+          paymentMethod: billingData.paymentMethod,
+          items,
+          subtotal: grandTotal,
+          discountAmount: billingData.discountAmount,
+          cgst: billingData.cgst,
+          sgst: billingData.sgst,
+          serviceChargeAmount: billingData.serviceChargeAmount,
+          packingCharge: billingData.packingCharge,
+          grandTotal: billingData.grandTotal,
+          tipAmount: billingData.tipAmount,
+        });
+        if (!printed) toast.error("Print failed — check the printer connection.");
+      }
 
       setCart({});
       setCartNotes({});
@@ -233,6 +256,8 @@ export default function NormalBilling({
       setCustomerPhone("");
       setCustomerAddress("");
       setStep("MENU");
+    } catch {
+      toast.error("Couldn't complete this order — please try again.");
     } finally {
       setSubmitting(false);
     }
