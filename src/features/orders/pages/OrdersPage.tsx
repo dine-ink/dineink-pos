@@ -40,6 +40,7 @@ export default function OrderHistory() {
   const [loading, setLoading] = useState(true);
   const [hasPrinter, setHasPrinter] = useState(false);
   const [voiding, setVoiding] = useState<number | null>(null);
+  const [completing, setCompleting] = useState<number | null>(null);
   const [refundOrder, setRefundOrder] = useState<any>(null);
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
@@ -150,6 +151,11 @@ export default function OrderHistory() {
   };
 
   const handleCompleteOrder = async (order: any) => {
+    // Guards against the double-click/slow-refresh duplicate-billing bug —
+    // a second click while the first is still in flight now no-ops here
+    // instead of reaching the backend and creating a second Bill.
+    if (completing === order.id) return;
+    setCompleting(order.id);
     const resolvedCustomerName =
       typeof order.customer === "object" && order.customer !== null
         ? (order.customer as any)?.name || ""
@@ -172,7 +178,10 @@ export default function OrderHistory() {
           else toast.error(res.data.message || "Couldn't complete this order.");
           return;
         } catch (err: any) {
-          if (!isNetworkError(err)) throw err;
+          if (!isNetworkError(err)) {
+            toast.error(err?.response?.data?.message || "Couldn't complete this order — please try again.");
+            return;
+          }
           // Genuine network failure despite isOnline===true — fall through
           // to the offline path below instead of losing this completion.
         }
@@ -181,6 +190,8 @@ export default function OrderHistory() {
       await completeOrderOffline(order, resolvedCustomerName);
     } catch {
       toast.error("Couldn't complete this order — please try again.");
+    } finally {
+      setCompleting(null);
     }
   };
 
@@ -347,8 +358,9 @@ export default function OrderHistory() {
                   </button>
                   {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
                     <button onClick={() => handleCompleteOrder(order)}
-                      className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-emerald-600">
-                      Complete
+                      disabled={completing === order.id}
+                      className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
+                      {completing === order.id ? "..." : "Complete"}
                     </button>
                   )}
                   {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
@@ -419,8 +431,9 @@ export default function OrderHistory() {
                         </button>
                         {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
                           <button onClick={() => handleCompleteOrder(order)}
-                            className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
-                            Complete
+                            disabled={completing === order.id}
+                            className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
+                            {completing === order.id ? "..." : "Complete"}
                           </button>
                         )}
                         {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
