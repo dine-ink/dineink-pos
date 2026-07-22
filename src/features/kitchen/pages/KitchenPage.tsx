@@ -5,6 +5,7 @@ import {
   updateRunningOrderStatus,
   approveItemCancel,
   rejectItemCancel,
+  toggleItemDone,
 } from "@/services/runningOrderService";
 import { getBranchDetails } from "@/services/branchService";
 import { setMenuItemAvailability } from "@/services/menuService";
@@ -97,8 +98,8 @@ type CardProps = {
   order:          any;
   onMarkReady:    (order: any) => void;
   isUpdating:     boolean;
-  done:           Set<number>;   // Set of item IDs (not indices)
-  onToggle:       (orderId: number, itemId: number) => void;
+  pendingToggles: Record<number, boolean>;   // itemId → optimistic done override
+  onToggle:       (orderId: number, itemId: number, currentlyChecked: boolean) => void;
   skipBatchIds:   Set<number> | undefined;
   now:            number;
   onCancelApprove: (itemId: number, orderId: number) => void;
@@ -106,14 +107,15 @@ type CardProps = {
 };
 
 function OrderCard({
-  order, onMarkReady, isUpdating, done, onToggle, skipBatchIds,
+  order, onMarkReady, isUpdating, pendingToggles, onToggle, skipBatchIds,
   now, onCancelApprove, onCancelReject,
 }: CardProps) {
   const items           = flattenItems(order, skipBatchIds);
-  const activeItems     = items.filter(i => i.status === "PENDING" || (!i.status));
+  const isChecked       = (item: OrderItem) => pendingToggles[item.id] ?? item.status === "DONE";
+  const activeItems     = items.filter(i => i.status !== "CANCELLED" && i.status !== "CANCEL_REQUESTED");
   const cancelRequests  = items.filter(i => i.status === "CANCEL_REQUESTED");
   const cancelledItems  = items.filter(i => i.status === "CANCELLED");
-  const allActiveDone   = activeItems.length > 0 && activeItems.every(i => done.has(i.id));
+  const allActiveDone   = activeItems.length > 0 && activeItems.every(isChecked);
   const hasCancelReqs   = cancelRequests.length > 0;
   const canMarkReady    = allActiveDone && !hasCancelReqs && activeItems.length > 0;
 
@@ -189,11 +191,11 @@ function OrderCard({
 
         {/* Active items — checkboxes */}
         {activeItems.map(item => {
-          const checked = done.has(item.id);
+          const checked = isChecked(item);
           return (
             <button
               key={item.id}
-              onClick={() => onToggle(order.id, item.id)}
+              onClick={() => onToggle(order.id, item.id, checked)}
               className={`flex w-full flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition active:scale-[0.98] ${
                 checked ? "bg-emerald-50" : "bg-gray-50 hover:bg-gray-100"
               }`}
@@ -253,7 +255,7 @@ function OrderCard({
               ? "Completing..."
               : canMarkReady
                 ? "✓ Mark Order Ready"
-                : `${done.size} / ${activeItems.length} items done`}
+                : `${activeItems.filter(isChecked).length} / ${activeItems.length} items done`}
           </button>
         )}
       </div>
@@ -386,7 +388,11 @@ export default function KitchenPage() {
   const [updatingId,   setUpdatingId]   = useState<number | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
   const [now,          setNow]          = useState(Date.now());
-  const [doneItems,    setDoneItems]    = useState<Record<number, Set<number>>>({}); // orderId → Set<itemId>
+  // "Done" is persisted server-side on the item itself (status: "DONE") so
+  // every KDS device shares one checklist — this only holds an optimistic
+  // itemId → done overlay for the brief window before the next fetch
+  // confirms it, so taps still feel instant.
+  const [pendingToggles, setPendingToggles] = useState<Record<number, boolean>>({});
   const [view,         setView]         = useState<"orders" | "club" | "availability">("orders");
   const [menuItems,    setMenuItems]    = useState<MenuItemRow[]>([]);
   const [categories,   setCategories]   = useState<{ id: number; name: string }[]>([]);
@@ -411,29 +417,22 @@ export default function KitchenPage() {
       const res = await getAllRunningOrders(user.restaurantId, user.branchId);
       if (res?.success) {
         const data: any[] = res.data ?? [];
-        const activeIds = new Set(data.map((o: any) => o.id));
 
-        // Detect re-activated orders (new batch) — clear their done state
-        const toReset: number[] = [];
+        // Detect re-activated orders (new batch) — a fresh batch's items
+        // come back PENDING from the server on their own, so there's no
+        // client-side "done" state left to reset anymore.
         for (const order of data) {
           const prev = prevStatusRef.current.get(order.id);
           const curr: string = order.status ?? "PENDING";
           if (prev !== undefined && prev !== "PENDING" && curr === "PENDING") {
-            toReset.push(order.id);
             autoCompletingRef.current.delete(order.id);
           }
           prevStatusRef.current.set(order.id, curr);
         }
 
-        setDoneItems(prev => {
-          const next: Record<number, Set<number>> = {};
-          Object.entries(prev).forEach(([k, v]) => {
-            const id = Number(k);
-            if (activeIds.has(id) && !toReset.includes(id)) next[id] = v;
-            else autoCompletingRef.current.delete(id);
-          });
-          return next;
-        });
+        // Server data is authoritative now — drop any optimistic overlay so
+        // a toggle that raced with this poll doesn't stick around stale.
+        setPendingToggles({});
 
         setOrders(data);
         setLastRefreshed(new Date());
@@ -511,16 +510,10 @@ export default function KitchenPage() {
     }
   }, [fetchOrders]);
 
-  const handleCancelApprove = useCallback(async (itemId: number, orderId: number) => {
+  const handleCancelApprove = useCallback(async (itemId: number) => {
     try {
       await approveItemCancel(itemId);
       await fetchOrders();
-      // Remove this item from done tracking if it was checked
-      setDoneItems(prev => {
-        const set = new Set(prev[orderId] ?? []);
-        set.delete(itemId);
-        return { ...prev, [orderId]: set };
-      });
     } catch { /* silent */ }
   }, [fetchOrders]);
 
@@ -531,36 +524,38 @@ export default function KitchenPage() {
     } catch { /* silent */ }
   }, [fetchOrders]);
 
-  // Auto-complete: all active (PENDING) items checked and no pending cancel requests
+  // Auto-complete: all active (PENDING/DONE) items checked off and no pending
+  // cancel requests. "Checked" is the server's item.status === "DONE",
+  // overridden by any still-in-flight optimistic toggle.
   useEffect(() => {
     for (const order of orders) {
       if (order.status !== "PREPARING") continue;
       const skipBatchIds = processedBatchesRef.current.get(order.id);
       const items        = flattenItems(order, skipBatchIds);
-      const activeItems  = items.filter(i => i.status === "PENDING" || !i.status);
+      const activeItems  = items.filter(i => i.status !== "CANCELLED" && i.status !== "CANCEL_REQUESTED");
       const hasCancelReqs = items.some(i => i.status === "CANCEL_REQUESTED");
-      const done         = doneItems[order.id];
 
       if (
         !hasCancelReqs &&
-        done &&
         activeItems.length > 0 &&
-        activeItems.every(i => done.has(i.id)) &&
+        activeItems.every(i => pendingToggles[i.id] ?? i.status === "DONE") &&
         !autoCompletingRef.current.has(order.id)
       ) {
         autoCompletingRef.current.add(order.id);
         handleMarkReady(order);
       }
     }
-  }, [doneItems, orders, handleMarkReady]);
+  }, [pendingToggles, orders, handleMarkReady]);
 
-  const handleItemToggle = useCallback((orderId: number, itemId: number) => {
-    setDoneItems(prev => {
-      const set = new Set(prev[orderId] ?? []);
-      if (set.has(itemId)) set.delete(itemId);
-      else set.add(itemId);
-      return { ...prev, [orderId]: set };
-    });
+  const handleItemToggle = useCallback(async (_orderId: number, itemId: number, currentlyChecked: boolean) => {
+    const next = !currentlyChecked;
+    setPendingToggles(prev => ({ ...prev, [itemId]: next }));
+    try {
+      await toggleItemDone(itemId, next);
+    } catch {
+      // Revert the optimistic flip — the server never confirmed it.
+      setPendingToggles(prev => ({ ...prev, [itemId]: currentlyChecked }));
+    }
   }, []);
 
   const preparingOrders = orders.filter(
@@ -638,7 +633,7 @@ export default function KitchenPage() {
                 order={order}
                 onMarkReady={handleMarkReady}
                 isUpdating={updatingId === order.id}
-                done={doneItems[order.id] ?? new Set()}
+                pendingToggles={pendingToggles}
                 onToggle={handleItemToggle}
                 skipBatchIds={processedBatchesRef.current.get(order.id)}
                 now={now}

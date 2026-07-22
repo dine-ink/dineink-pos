@@ -18,3 +18,11 @@ export const getMyProfile = async () => {
 
   return response.data;
 };
+
+// Unlocks a manual discount above the branch's approval threshold — checks
+// a manager's password against any MANAGER/OWNER in this restaurant without
+// swapping the cashier's own logged-in session (no new token is issued).
+export const verifyManagerOverride = async (password: string) => {
+  const response = await api.post("/auth/verify-manager-override", { password });
+  return response.data;
+};

@@ -80,6 +80,14 @@ export const rejectItemCancel = async (itemId: number) => {
   return response.data;
 };
 
+// Persisted server-side (not local component state) so every KDS device
+// viewing the same order shares one checklist instead of each tablet
+// tracking "done" independently.
+export const toggleItemDone = async (itemId: number, done: boolean) => {
+  const response = await api.patch(`/running-orders/items/${itemId}/toggle-done`, { done });
+  return response.data;
+};
+
 export const holdRunningOrder = async (orderId: number) => {
   const response = await api.patch(`/running-orders/${orderId}/hold`);
   return response.data;
