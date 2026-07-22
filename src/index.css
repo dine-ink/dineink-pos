@@ -1,5 +1,37 @@
 @import "tailwindcss";
 
+/* Remap Tailwind's default red and rose color scales to owner-web's brand
+   palette (#b10000 primary, #950000 and #8f0000 hover shades) so every
+   existing red or rose utility class across the app picks up the same
+   theme automatically, with no per-file class changes needed. rose is
+   mapped identically to red since this app only ever uses it as part of a
+   red gradient, not as a distinct accent. */
+@theme {
+  --color-red-50: #fdf1f1;
+  --color-red-100: #fbe1e1;
+  --color-red-200: #f8c9c9;
+  --color-red-300: #f0a0a0;
+  --color-red-400: #e46c6c;
+  --color-red-500: #b10000;
+  --color-red-600: #950000;
+  --color-red-700: #8f0000;
+  --color-red-800: #700000;
+  --color-red-900: #560000;
+  --color-red-950: #350000;
+
+  --color-rose-50: #fdf1f1;
+  --color-rose-100: #fbe1e1;
+  --color-rose-200: #f8c9c9;
+  --color-rose-300: #f0a0a0;
+  --color-rose-400: #e46c6c;
+  --color-rose-500: #b10000;
+  --color-rose-600: #950000;
+  --color-rose-700: #8f0000;
+  --color-rose-800: #700000;
+  --color-rose-900: #560000;
+  --color-rose-950: #350000;
+}
+
 html,
 body,
 #root {

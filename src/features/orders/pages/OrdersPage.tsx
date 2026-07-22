@@ -27,7 +27,10 @@ const getPayBadge = (s: string) =>
         ? "bg-gray-200 text-gray-500"
         : "bg-red-100 text-red-700";
 const getStatusBadge = (s: string) =>
-  s === "COMPLETED" ? "bg-emerald-100 text-emerald-700" : s === "READY" ? "bg-blue-100 text-blue-700" : "bg-yellow-100 text-yellow-700";
+  s === "COMPLETED" ? "bg-emerald-100 text-emerald-700"
+    : s === "CONFIRMED" ? "bg-indigo-100 text-indigo-700"
+    : s === "READY" ? "bg-blue-100 text-blue-700"
+    : "bg-yellow-100 text-yellow-700";
 const customerDisplay = (order: any) =>
   typeof order.customer === "object" ? order.customer?.name || "Walk-in" : order.customer || "Walk-in";
 
@@ -342,7 +345,7 @@ export default function OrderHistory() {
                     className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                     <PrinterIcon className="h-3.5 w-3.5" />
                   </button>
-                  {order.orderStatus !== "COMPLETED" && (
+                  {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
                     <button onClick={() => handleCompleteOrder(order)}
                       className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-emerald-600">
                       Complete
@@ -414,7 +417,7 @@ export default function OrderHistory() {
                           className={`flex h-6 w-6 items-center justify-center rounded-md transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
                           <PrinterIcon className="h-3 w-3" />
                         </button>
-                        {order.orderStatus !== "COMPLETED" && (
+                        {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
                           <button onClick={() => handleCompleteOrder(order)}
                             className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600">
                             Complete

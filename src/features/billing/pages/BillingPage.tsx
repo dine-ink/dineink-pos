@@ -83,8 +83,9 @@ export default function BillingPage() {
   useEffect(() => {
     const billingTypes = branchData?.billing?.billingTypes || [];
     if (billingTypes.includes("Table Wise Billing")) setBillingType("DINE_IN");
-    else if (billingTypes.includes("Takeaway Billing")) setBillingType("TAKE_AWAY");
-    else if (billingTypes.includes("Quick Billing")) setBillingType("QUICK_BILL");
+    else if (billingTypes.includes("Takeaway Billing") || billingTypes.includes("Quick Billing")) {
+      setBillingType("TAKEAWAY_QUICK");
+    }
   }, [branchData]);
 
   return (
@@ -139,7 +140,7 @@ export default function BillingPage() {
             runningOrders={runningOrders}
             addOnMap={addOnMap}
           />
-        ) : (billingType === "TAKE_AWAY" || billingType === "QUICK_BILL") ? (
+        ) : billingType === "TAKEAWAY_QUICK" ? (
           <NormalBilling
             billingType={billingType}
             step={step}

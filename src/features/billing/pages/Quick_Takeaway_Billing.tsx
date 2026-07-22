@@ -5,7 +5,8 @@ import AddOnSelectorModal from "@/components/billing/AddOnSelectorModal";
 import { useMemo, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
-import { saveRunningOrder } from "@/services/runningOrderService";
+import { saveRunningOrder, closeRunningOrder } from "@/services/runningOrderService";
+import { isNetworkError } from "@/utils/offlineQueue";
 import { PauseCircle, Play } from "lucide-react";
 import { printReceipt } from "@/utils/printer";
 
@@ -63,6 +64,22 @@ export default function NormalBilling({
   });
   const [submitting, setSubmitting] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
+
+  // Take Away and Quick Bill share this screen now — the specific type is
+  // picked at checkout (CustomerSection), right before the bill is generated.
+  const availableOrderTypes = useMemo(() => {
+    const enabled: string[] = branchData?.billing?.billingTypes || [];
+    const opts: { key: string; label: string }[] = [];
+    if (enabled.includes("Takeaway Billing")) opts.push({ key: "TAKE_AWAY", label: "Take Away" });
+    if (enabled.includes("Quick Billing")) opts.push({ key: "QUICK_BILL", label: "Quick Bill" });
+    return opts.length ? opts : [{ key: "TAKE_AWAY", label: "Take Away" }];
+  }, [branchData]);
+  const [selectedOrderType, setSelectedOrderType] = useState(availableOrderTypes[0].key);
+  useEffect(() => {
+    if (!availableOrderTypes.some((o) => o.key === selectedOrderType)) {
+      setSelectedOrderType(availableOrderTypes[0].key);
+    }
+  }, [availableOrderTypes]);
 
   useEffect(() => {
     try {
@@ -201,7 +218,7 @@ export default function NormalBilling({
         restaurantId: user.restaurantId,
         branchId: user.branchId,
         createdById: user.id,
-        orderType: billingType,
+        orderType: selectedOrderType,
         customerName,
         customerPhone,
         customerAddress,
@@ -225,16 +242,56 @@ export default function NormalBilling({
         );
       }
 
+      // Bill it upfront (quick/takeaway is paid before the kitchen preps it)
+      // so the order shows as "Confirmed" on the Orders page immediately —
+      // nobody has to watch the kitchen and remember to press "Complete"
+      // there. keepOrderActive leaves the running order visible to the
+      // kitchen; it closes itself out once marked READY.
+      let billNo: string | null = null;
+      if (!saveResponse.queuedOffline && saveResponse.data?.id) {
+        try {
+          const billResponse = await closeRunningOrder({
+            runningOrderId: saveResponse.data.id,
+            customerName,
+            customerPhone,
+            paymentMethod: billingData.paymentMethod,
+            orderType: selectedOrderType,
+            orderStatus: "CONFIRMED",
+            keepOrderActive: true,
+            subtotal: grandTotal,
+            discountAmount: billingData.discountAmount,
+            packingCharge: billingData.packingCharge,
+            serviceCharge: billingData.serviceChargeAmount,
+            gstAmount: billingData.gstAmount,
+            cgst: billingData.cgst,
+            sgst: billingData.sgst,
+            finalAmount: billingData.grandTotal,
+            tipAmount: billingData.tipAmount,
+          });
+          if (billResponse.success) billNo = billResponse.data?.billNo ?? null;
+          else toast.error(billResponse.message || "Order sent to kitchen, but billing failed — complete it from Orders.");
+        } catch (err: any) {
+          // The KOT is already placed either way — if billing fails (e.g.
+          // connection dropped between the two calls), staff can still
+          // finish it manually from the Orders page's "Complete" button.
+          toast.error(
+            isNetworkError(err)
+              ? "Order sent to kitchen — no connection to bill it now, complete it from Orders once reconnected."
+              : "Order sent to kitchen, but billing failed — complete it from Orders.",
+          );
+        }
+      }
+
       if (billingData.shouldPrint) {
         const printed = await printReceipt({
           shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
           shopAddress: branchData?.address || user?.branch?.address,
           shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
-          billNo: saveResponse.queuedOffline
+          billNo: billNo ?? (saveResponse.queuedOffline
             ? "PENDING — NOT YET SYNCED"
-            : `KOT-${saveResponse.data?.id ?? Date.now()}`,
+            : `KOT-${saveResponse.data?.id ?? Date.now()}`),
           customerName,
-          billingType,
+          billingType: selectedOrderType,
           paymentMethod: billingData.paymentMethod,
           items,
           subtotal: grandTotal,
@@ -326,7 +383,7 @@ export default function NormalBilling({
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
-                    {billingType === "TAKE_AWAY" ? "Takeaway" : "Quick Bill"}
+                    {selectedOrderType === "TAKE_AWAY" ? "Takeaway" : "Quick Bill"}
                   </p>
                   <p className="text-sm font-black text-gray-900">
                     {totalItems} items ·{" "}
@@ -362,7 +419,7 @@ export default function NormalBilling({
                 Current Order
               </h3>
               <p className="text-[10px] text-gray-500 mt-0.5">
-                {billingType === "TAKE_AWAY" ? "Takeaway" : "Quick Billing"}
+                {selectedOrderType === "TAKE_AWAY" ? "Takeaway" : "Quick Billing"}
               </p>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-2.5">
@@ -450,6 +507,9 @@ export default function NormalBilling({
           setCustomerAddress={setCustomerAddress}
           grand_Total={grandTotal}
           billingType={billingType}
+          orderTypeOptions={availableOrderTypes}
+          selectedOrderType={selectedOrderType}
+          setSelectedOrderType={setSelectedOrderType}
           setStep={setStep}
           onConfirm={handleConfirmOrder}
           billing={branchData.billing}

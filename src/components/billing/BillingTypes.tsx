@@ -17,11 +17,11 @@ export default function BillingTypeTabs({
   if (billingTypes.includes("Table Wise Billing")) {
     billingTabs.push({ key: "DINE_IN", label: "Dine In", emoji: "🍽" });
   }
-  if (billingTypes.includes("Takeaway Billing")) {
-    billingTabs.push({ key: "TAKE_AWAY", label: "Take Away", emoji: "🛍" });
-  }
-  if (billingTypes.includes("Quick Billing")) {
-    billingTabs.push({ key: "QUICK_BILL", label: "Quick Bill", emoji: "⚡" });
+  // Take Away and Quick Bill share one tab/screen now — which of the two an
+  // order actually is gets picked at checkout, right before the bill is
+  // generated, instead of forcing that choice upfront here.
+  if (billingTypes.includes("Takeaway Billing") || billingTypes.includes("Quick Billing")) {
+    billingTabs.push({ key: "TAKEAWAY_QUICK", label: "Takeaway / Quick", emoji: "🛍" });
   }
 
   if (billingTabs.length === 0) return null;

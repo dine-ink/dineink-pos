@@ -8,6 +8,8 @@ type Props = {
   customerPhone: string; setCustomerPhone: any;
   customerAddress: string; setCustomerAddress: any;
   grand_Total: number; billingType: string;
+  orderTypeOptions?: { key: string; label: string }[];
+  selectedOrderType?: string; setSelectedOrderType?: any;
   setStep: any; billing: any; onConfirm: any;
   loading?: boolean;
 };
@@ -17,6 +19,7 @@ export default function CustomerSection({
   customerPhone, setCustomerPhone,
   customerAddress, setCustomerAddress,
   grand_Total, billing, setStep, onConfirm, loading = false,
+  orderTypeOptions, selectedOrderType, setSelectedOrderType,
 }: Props) {
   const [subtotal] = useState<number>(grand_Total);
   const [discount, setDiscount] = useState<number>(0);
@@ -73,7 +76,7 @@ export default function CustomerSection({
   const inputClass = "flex h-8 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 focus-within:border-red-400 focus-within:bg-white transition";
 
   const billingRow = (label: React.ReactNode, value: React.ReactNode, isTotal = false) => (
-    <div className={`flex items-center justify-between px-2.5 py-2 ${isTotal ? "bg-red-50" : "border-b border-gray-100"}`}>
+    <div className={`flex items-center justify-between px-2.5 py-2 xl:py-1 ${isTotal ? "bg-red-50" : "border-b border-gray-100"}`}>
       <span className={`text-xs ${isTotal ? "font-black text-red-700" : "text-gray-600"}`}>{label}</span>
       <span className={`text-xs font-bold ${isTotal ? "text-red-600" : "text-gray-800"}`}>{value}</span>
     </div>
@@ -94,13 +97,13 @@ export default function CustomerSection({
       </div>
 
       {/* BODY */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="p-2 xl:p-3">
-          <div className="grid grid-cols-1 gap-2 xl:grid-cols-[1fr_280px]">
+      <div className="flex-1 min-h-0 overflow-y-auto xl:overflow-hidden">
+        <div className="p-2 xl:h-full xl:p-2.5">
+          <div className="grid grid-cols-1 gap-2 xl:h-full xl:grid-cols-[1fr_280px] xl:overflow-hidden">
             {/* LEFT */}
-            <div className="space-y-2">
+            <div className="space-y-2 xl:h-full xl:min-h-0 xl:space-y-1.5 xl:overflow-y-auto xl:pr-1">
               {/* CUSTOMER DETAILS */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
                 <h3 className="text-xs font-black text-gray-900">Customer Details</h3>
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
@@ -131,8 +134,8 @@ export default function CustomerSection({
               </div>
 
               {/* BILLING DETAILS */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-xs font-black text-gray-900">Billing Details</h3>
+              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Billing Details</h3>
                 <div className="rounded-xl border border-gray-200 overflow-hidden">
                   {billingRow(<span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Subtotal</span>, `₹${subtotal.toFixed(2)}`)}
                   {billingRow(
@@ -202,11 +205,11 @@ export default function CustomerSection({
             </div>
 
             {/* RIGHT */}
-            <div className="space-y-2">
+            <div className="space-y-2 xl:h-full xl:min-h-0 xl:space-y-1.5 xl:overflow-y-auto xl:pr-1">
               {/* TOTAL PAYABLE */}
-              <div className="rounded-xl bg-gradient-to-br from-red-500 to-rose-600 p-4 text-white shadow-lg shadow-red-200">
+              <div className="rounded-xl bg-gradient-to-br from-red-500 to-rose-600 p-4 text-white shadow-lg shadow-red-200 xl:p-3">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">Total Payable</p>
-                <h1 className="mt-1 text-4xl font-black">₹{finalPayable.toFixed(0)}</h1>
+                <h1 className="mt-1 text-4xl font-black xl:text-3xl">₹{finalPayable.toFixed(0)}</h1>
                 {tipAmount > 0 && (
                   <p className="mt-1 text-[11px] text-red-100">₹{grandTotal.toFixed(0)} bill + ₹{tipAmount.toFixed(0)} tip</p>
                 )}
@@ -219,8 +222,8 @@ export default function CustomerSection({
               </div>
 
               {/* SPLIT BILL */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-xs font-black text-gray-900">Split Bill</h3>
+              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Split Bill</h3>
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => setSplitCount((n) => Math.max(1, n - 1))}
@@ -253,8 +256,8 @@ export default function CustomerSection({
 
               {/* TIP */}
               {tipsEnabled && (
-                <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                  <h3 className="mb-2 text-xs font-black text-gray-900">Add Tip</h3>
+                <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
+                  <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Add Tip</h3>
                   <div className="flex items-center gap-1.5">
                     {[0, 5, 10, 15].map((pct) => {
                       const amount = pct === 0 ? 0 : Math.round((grandTotal * pct) / 100);
@@ -286,8 +289,8 @@ export default function CustomerSection({
               )}
 
               {/* PAYMENT METHOD */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-xs font-black text-gray-900">Payment Method</h3>
+              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Payment Method</h3>
                 <div className="space-y-1.5">
                   {paymentMethods.map((method: string) => {
                     const value = method.toLowerCase();
@@ -309,8 +312,8 @@ export default function CustomerSection({
               </div>
 
               {/* CASH RECEIVED & BALANCE */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-xs font-black text-gray-900">Cash Payment</h3>
+              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Cash Payment</h3>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="mb-1 block text-[10px] font-bold text-gray-700">
@@ -338,28 +341,53 @@ export default function CustomerSection({
                 </div>
               </div>
 
-              {/* CONFIRM — desktop */}
-              <div className="hidden xl:flex gap-2">
-                <button
-                  onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
-                  disabled={loading}
-                  className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 transition hover:bg-gray-50 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  {loading ? "..." : "Confirm"}
-                </button>
-                <button
-                  onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
-                  disabled={loading}
-                  className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  <Printer className="h-4 w-4" />
-                  {loading ? "Placing..." : "Confirm + Print"}
-                </button>
-              </div>
+              {/* ORDER TYPE — picked right before the bill is generated */}
+              {orderTypeOptions && orderTypeOptions.length > 1 && (
+                <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
+                  <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Order Type</h3>
+                  <div className="flex gap-2">
+                    {orderTypeOptions.map((opt) => {
+                      const active = selectedOrderType === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          onClick={() => setSelectedOrderType?.(opt.key)}
+                          className={`flex-1 rounded-lg border px-3 py-2 text-xs font-bold transition ${
+                            active
+                              ? "border-red-400 bg-red-50 text-red-600"
+                              : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
+      </div>
+
+      {/* CONFIRM — laptop/monitor: pinned footer so it's always visible, no page scroll needed */}
+      <div className="hidden shrink-0 gap-2 border-t border-gray-100 bg-white p-2.5 xl:flex">
+        <button
+          onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: false })}
+          disabled={loading}
+          className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 transition hover:bg-gray-50 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <CheckCircle className="h-4 w-4" />
+          {loading ? "..." : "Confirm"}
+        </button>
+        <button
+          onClick={() => onConfirm({ paymentMethod, grandTotal, tipAmount, splitCount, cgst, sgst, gstAmount, serviceChargeAmount, discountAmount, packingCharge, shouldPrint: true })}
+          disabled={loading}
+          className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-xl shadow-red-200 transition hover:shadow-2xl active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+        >
+          <Printer className="h-4 w-4" />
+          {loading ? "Placing..." : "Confirm + Print"}
+        </button>
       </div>
 
       {/* MOBILE CONFIRM */}
