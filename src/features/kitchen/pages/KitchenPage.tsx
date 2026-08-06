@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import {
   getAllRunningOrders,
@@ -6,11 +6,17 @@ import {
   approveItemCancel,
   rejectItemCancel,
   toggleItemDone,
+  holdRunningOrder,
+  resumeRunningOrder,
 } from "@/services/runningOrderService";
 import { getBranchDetails } from "@/services/branchService";
 import { setMenuItemAvailability } from "@/services/menuService";
-import { ChefHat, RefreshCw, Clock, UtensilsCrossed, Layers, Ban, Search } from "lucide-react";
+import { api } from "@/services/api";
+import { usePolling } from "@/hooks/usePolling";
+import { ChefHat, RefreshCw, Clock, UtensilsCrossed, Layers, Ban, Search, AlertTriangle } from "lucide-react";
 import PageLoader from "@/components/ui/PageLoader";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { EmptyState } from "@/components/ui/empty-state";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -21,6 +27,15 @@ type OrderItem = {
   status: string;
   notes?: string | null;
   addOns?: { name: string; price: number }[];
+};
+
+// "current" slice of GET /analytics/:restaurantId/:branchId/peak-hour-analysis
+// — advisory only, nothing here auto-holds an order.
+type BottleneckInfo = {
+  queueDepth: number;
+  isBottleneckNow: boolean;
+  utilizationPercentNow: number | null;
+  throttleSuggested: boolean;
 };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -92,6 +107,26 @@ function aggregateByDish(orders: any[], processedBatches: Map<number, Set<number
     .sort((a, b) => b.total - a.total);
 }
 
+// ─── ElapsedBadge ────────────────────────────────────────────────────────────
+// Owns its own 1-second tick so only this small badge re-renders every
+// second — the rest of KitchenPage (and every other OrderCard) no longer has
+// to re-render/recompute just because a clock ticked somewhere on the page.
+
+function ElapsedBadgeBase({ createdAt }: { createdAt: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <div className={`flex items-center gap-1 text-xs font-black ${getElapsedColor(createdAt, now)}`}>
+      <Clock className="h-3 w-3" />
+      {getElapsed(createdAt, now)}
+    </div>
+  );
+}
+const ElapsedBadge = memo(ElapsedBadgeBase);
+
 // ─── OrderCard ───────────────────────────────────────────────────────────────
 
 type CardProps = {
@@ -101,14 +136,17 @@ type CardProps = {
   pendingToggles: Record<number, boolean>;   // itemId → optimistic done override
   onToggle:       (orderId: number, itemId: number, currentlyChecked: boolean) => void;
   skipBatchIds:   Set<number> | undefined;
-  now:            number;
   onCancelApprove: (itemId: number, orderId: number) => void;
   onCancelReject:  (itemId: number, orderId: number) => void;
+  isHeld:         boolean;
+  isHolding:      boolean;
+  onHold:         (order: any) => void;
+  onResume:       (order: any) => void;
 };
 
-function OrderCard({
+function OrderCardBase({
   order, onMarkReady, isUpdating, pendingToggles, onToggle, skipBatchIds,
-  now, onCancelApprove, onCancelReject,
+  onCancelApprove, onCancelReject, isHeld, isHolding, onHold, onResume,
 }: CardProps) {
   const items           = flattenItems(order, skipBatchIds);
   const isChecked       = (item: OrderItem) => pendingToggles[item.id] ?? item.status === "DONE";
@@ -124,41 +162,44 @@ function OrderCard({
 
   return (
     <div className={`flex flex-col rounded-2xl border-2 bg-white shadow-sm transition-all ${
-      hasCancelReqs ? "border-orange-400" : canMarkReady ? "border-emerald-300" : "border-blue-200"
+      isHeld ? "border-gray-300 opacity-70" : hasCancelReqs ? "border-orange-400" : canMarkReady ? "border-emerald-300" : "border-blue-200"
     }`}>
       {/* Header */}
       <div className={`rounded-t-xl px-3 py-2 ${
-        hasCancelReqs ? "bg-orange-50" : canMarkReady ? "bg-emerald-50" : "bg-blue-50"
+        isHeld ? "bg-gray-100" : hasCancelReqs ? "bg-orange-50" : canMarkReady ? "bg-emerald-50" : "bg-blue-50"
       }`}>
         <div className="flex items-start justify-between">
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-lg font-black text-gray-900">{tableName}</span>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-blue-700">
-                Preparing
-              </span>
+              {isHeld ? (
+                <StatusBadge tone="bg-gray-200 text-gray-600" size="sm" className="uppercase tracking-widest">
+                  ⏸ Held
+                </StatusBadge>
+              ) : (
+                <StatusBadge tone="bg-blue-100 text-blue-700" size="sm" className="uppercase tracking-widest">
+                  Preparing
+                </StatusBadge>
+              )}
               {order.orderType === "TAKE_AWAY" && (
-                <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-purple-700">
+                <StatusBadge tone="bg-purple-100 text-purple-700" size="sm" className="uppercase tracking-widest">
                   📦 Parcel
-                </span>
+                </StatusBadge>
               )}
               {hasCancelReqs && (
-                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[9px] font-black uppercase text-orange-700 animate-pulse">
+                <StatusBadge tone="bg-orange-100 text-orange-700" size="sm" className="uppercase animate-pulse">
                   ⚠ Cancel Request
-                </span>
+                </StatusBadge>
               )}
             </div>
             <p className="mt-0.5 text-[10px] font-black text-gray-500">KOT #{kot}</p>
           </div>
-          <div className={`flex items-center gap-1 text-xs font-black ${getElapsedColor(order.createdAt, now)}`}>
-            <Clock className="h-3 w-3" />
-            {getElapsed(order.createdAt, now)}
-          </div>
+          <ElapsedBadge createdAt={order.createdAt} />
         </div>
       </div>
 
       {/* Items */}
-      <div className="flex-1 p-3 space-y-1.5">
+      <div className={`flex-1 p-3 space-y-1.5 ${isHeld ? "pointer-events-none opacity-50" : ""}`}>
         {items.length === 0 && (
           <p className="text-xs italic text-gray-400">No new items</p>
         )}
@@ -171,16 +212,16 @@ function OrderCard({
                 <p className="text-xs font-bold text-gray-900">{item.name} <span className="text-gray-500">× {item.qty}</span></p>
                 <p className="text-[9px] font-black text-orange-600 uppercase tracking-wide">Cancel Requested</p>
               </div>
-              <div className="flex gap-1 shrink-0">
+              <div className="flex gap-2.5 shrink-0">
                 <button
                   onClick={() => onCancelApprove(item.id, order.id)}
-                  className="rounded-lg bg-red-500 px-2 py-1 text-[10px] font-black text-white transition hover:bg-red-600"
+                  className="rounded-lg bg-red-500 px-3 py-2 text-[10px] font-black text-white transition hover:bg-red-600"
                 >
                   Cancel ✓
                 </button>
                 <button
                   onClick={() => onCancelReject(item.id, order.id)}
-                  className="rounded-lg bg-gray-200 px-2 py-1 text-[10px] font-black text-gray-700 transition hover:bg-gray-300"
+                  className="rounded-lg bg-gray-200 px-3 py-2 text-[10px] font-black text-gray-700 transition hover:bg-gray-300"
                 >
                   Keep ✗
                 </button>
@@ -238,41 +279,65 @@ function OrderCard({
       </div>
 
       {/* Action footer */}
-      <div className="border-t border-gray-100 p-2.5">
-        {hasCancelReqs ? (
-          <div className="flex h-9 w-full items-center justify-center rounded-xl bg-orange-50 text-xs font-black text-orange-600">
-            ⚠ Resolve cancellations above first
-          </div>
-        ) : (
+      <div className="border-t border-gray-100 p-2.5 space-y-1.5">
+        {isHeld ? (
           <button
-            onClick={() => onMarkReady(order)}
-            disabled={isUpdating || !canMarkReady}
-            className={`h-9 w-full rounded-xl text-xs font-black text-white shadow-sm transition active:scale-[0.99] disabled:opacity-60 ${
-              canMarkReady ? "bg-emerald-500 hover:bg-emerald-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
-            }`}
+            onClick={() => onResume(order)}
+            disabled={isHolding}
+            className="h-9 w-full rounded-xl bg-blue-500 text-xs font-black text-white shadow-sm transition active:scale-[0.99] hover:bg-blue-600 disabled:opacity-60"
           >
-            {isUpdating
-              ? "Completing..."
-              : canMarkReady
-                ? "✓ Mark Order Ready"
-                : `${activeItems.filter(isChecked).length} / ${activeItems.length} items done`}
+            {isHolding ? "Resuming..." : "▶ Resume Order"}
           </button>
+        ) : (
+          <>
+            {hasCancelReqs ? (
+              <div className="flex h-9 w-full items-center justify-center rounded-xl bg-orange-50 text-xs font-black text-orange-600">
+                ⚠ Resolve cancellations above first
+              </div>
+            ) : (
+              <button
+                onClick={() => onMarkReady(order)}
+                disabled={isUpdating || !canMarkReady}
+                className={`h-9 w-full rounded-xl text-xs font-black text-white shadow-sm transition active:scale-[0.99] disabled:opacity-60 ${
+                  canMarkReady ? "bg-emerald-500 hover:bg-emerald-600" : "bg-gray-200 text-gray-400 cursor-not-allowed"
+                }`}
+              >
+                {isUpdating
+                  ? "Completing..."
+                  : canMarkReady
+                    ? "✓ Mark Order Ready"
+                    : `${activeItems.filter(isChecked).length} / ${activeItems.length} items done`}
+              </button>
+            )}
+            <button
+              onClick={() => onHold(order)}
+              disabled={isHolding}
+              className="h-8 w-full rounded-xl border border-gray-200 bg-white text-[11px] font-black text-gray-500 transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              {isHolding ? "Holding..." : "⏸ Hold Order"}
+            </button>
+          </>
         )}
       </div>
     </div>
   );
 }
+const OrderCard = memo(OrderCardBase);
 
 // ─── Club View ───────────────────────────────────────────────────────────────
 
-function ClubView({ orders, processedBatches }: { orders: any[]; processedBatches: Map<number, Set<number>> }) {
-  const dishes = aggregateByDish(orders, processedBatches);
+function ClubViewBase({ orders, processedBatches }: { orders: any[]; processedBatches: Map<number, Set<number>> }) {
+  // processedBatches is a ref-held Map with a stable identity across renders
+  // (mutated in place, not replaced) — this only recomputes when `orders`
+  // itself changes (e.g. the 30s poll), not on unrelated re-renders.
+  const dishes = useMemo(() => aggregateByDish(orders, processedBatches), [orders, processedBatches]);
   if (dishes.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center py-16 text-center">
-        <Layers className="h-10 w-10 text-gray-200" />
-        <p className="mt-3 text-sm font-bold text-gray-400">No active orders to club</p>
-      </div>
+      <EmptyState
+        icon={<Layers className="h-10 w-10 text-gray-200" />}
+        title="No active orders to club"
+        className="h-full py-16"
+      />
     );
   }
   return (
@@ -299,6 +364,7 @@ function ClubView({ orders, processedBatches }: { orders: any[]; processedBatche
     </div>
   );
 }
+const ClubView = memo(ClubViewBase);
 
 // ─── Availability View ───────────────────────────────────────────────────────
 // Lets kitchen staff mark a dish sold out (or back in stock) themselves,
@@ -306,7 +372,7 @@ function ClubView({ orders, processedBatches }: { orders: any[]; processedBatche
 
 type MenuItemRow = { id: number; name: string; categoryId: number | null; isAvailable: boolean };
 
-function AvailabilityView({
+function AvailabilityViewBase({
   items, categories, search, setSearch, togglingId, onToggle,
 }: {
   items: MenuItemRow[];
@@ -330,10 +396,11 @@ function AvailabilityView({
 
   if (items.length === 0) {
     return (
-      <div className="flex h-full flex-col items-center justify-center py-16 text-center">
-        <Ban className="h-10 w-10 text-gray-200" />
-        <p className="mt-3 text-sm font-bold text-gray-400">No menu items found</p>
-      </div>
+      <EmptyState
+        icon={<Ban className="h-10 w-10 text-gray-200" />}
+        title="No menu items found"
+        className="h-full py-16"
+      />
     );
   }
 
@@ -378,6 +445,7 @@ function AvailabilityView({
     </div>
   );
 }
+const AvailabilityView = memo(AvailabilityViewBase);
 
 // ─── KitchenPage ─────────────────────────────────────────────────────────────
 
@@ -387,7 +455,6 @@ export default function KitchenPage() {
   const [loading,      setLoading]      = useState(false);
   const [updatingId,   setUpdatingId]   = useState<number | null>(null);
   const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
-  const [now,          setNow]          = useState(Date.now());
   // "Done" is persisted server-side on the item itself (status: "DONE") so
   // every KDS device shares one checklist — this only holds an optimistic
   // itemId → done overlay for the brief window before the next fetch
@@ -398,17 +465,20 @@ export default function KitchenPage() {
   const [categories,   setCategories]   = useState<{ id: number; name: string }[]>([]);
   const [menuSearch,   setMenuSearch]   = useState("");
   const [togglingId,   setTogglingId]   = useState<number | null>(null);
+  const [holdingId,    setHoldingId]    = useState<number | null>(null);
+  // The backend's hold endpoint doesn't come with a confirmed status-field
+  // contract we can rely on yet, so held-ness is tracked locally (set on a
+  // successful hold call, cleared on a successful resume) — this keeps the
+  // buttons fully functional regardless of what field name the server ends
+  // up using, while still layering on `order.status === "HELD"` below in
+  // case the server does report that value.
+  const [heldOrderIds, setHeldOrderIds] = useState<Set<number>>(new Set());
+  const [bottleneck,   setBottleneck]   = useState<BottleneckInfo | null>(null);
 
   const processedBatchesRef = useRef<Map<number, Set<number>>>(new Map());
   const prevStatusRef       = useRef<Map<number, string>>(new Map());
   const autoCompletingRef   = useRef<Set<number>>(new Set());
   const transitionedRef     = useRef<Set<number>>(new Set());
-
-  // 1-second tick for live timers
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const fetchOrders = useCallback(async () => {
     if (!user?.restaurantId || !user?.branchId) return;
@@ -456,9 +526,30 @@ export default function KitchenPage() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
   }, [fetchOrders]);
+  usePolling(fetchOrders, 30000, [fetchOrders]);
+
+  // Advisory-only capacity signal — never holds an order automatically,
+  // just surfaces a banner so staff can decide to hold new orders themselves.
+  const fetchBottleneck = useCallback(async () => {
+    if (!user?.restaurantId || !user?.branchId) return;
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const res = await api.get(
+        `/analytics/${user.restaurantId}/${user.branchId}/peak-hour-analysis?from=${today}&to=${today}`,
+      );
+      if (res.data?.success) {
+        setBottleneck(res.data.data?.current ?? null);
+      }
+    } catch {
+      // silent — advisory banner only, not on the critical KDS path
+    }
+  }, [user?.restaurantId, user?.branchId]);
+
+  useEffect(() => {
+    fetchBottleneck();
+  }, [fetchBottleneck]);
+  usePolling(fetchBottleneck, 30000, [fetchBottleneck]);
 
   const fetchMenuAvailability = useCallback(async () => {
     if (!user?.branchId) return;
@@ -524,12 +615,45 @@ export default function KitchenPage() {
     } catch { /* silent */ }
   }, [fetchOrders]);
 
+  const handleHoldOrder = useCallback(async (order: any) => {
+    setHoldingId(order.id);
+    try {
+      await holdRunningOrder(order.id);
+      setHeldOrderIds(prev => new Set(prev).add(order.id));
+      await fetchOrders();
+    } catch {
+      // silent — order stays active, staff can retry
+    } finally {
+      setHoldingId(null);
+    }
+  }, [fetchOrders]);
+
+  const handleResumeOrder = useCallback(async (order: any) => {
+    setHoldingId(order.id);
+    try {
+      await resumeRunningOrder(order.id);
+      setHeldOrderIds(prev => {
+        const next = new Set(prev);
+        next.delete(order.id);
+        return next;
+      });
+      await fetchOrders();
+    } catch {
+      // silent — order stays held, staff can retry
+    } finally {
+      setHoldingId(null);
+    }
+  }, [fetchOrders]);
+
   // Auto-complete: all active (PENDING/DONE) items checked off and no pending
   // cancel requests. "Checked" is the server's item.status === "DONE",
   // overridden by any still-in-flight optimistic toggle.
   useEffect(() => {
     for (const order of orders) {
       if (order.status !== "PREPARING") continue;
+      // A held order must stay untouched until staff explicitly resumes it —
+      // skip even if its items happen to already be fully checked off.
+      if (order.status === "HELD" || heldOrderIds.has(order.id)) continue;
       const skipBatchIds = processedBatchesRef.current.get(order.id);
       const items        = flattenItems(order, skipBatchIds);
       const activeItems  = items.filter(i => i.status !== "CANCELLED" && i.status !== "CANCEL_REQUESTED");
@@ -545,7 +669,7 @@ export default function KitchenPage() {
         handleMarkReady(order);
       }
     }
-  }, [pendingToggles, orders, handleMarkReady]);
+  }, [pendingToggles, orders, handleMarkReady, heldOrderIds]);
 
   const handleItemToggle = useCallback(async (_orderId: number, itemId: number, currentlyChecked: boolean) => {
     const next = !currentlyChecked;
@@ -558,8 +682,19 @@ export default function KitchenPage() {
     }
   }, []);
 
-  const preparingOrders = orders.filter(
-    o => !o.status || o.status === "PENDING" || o.status === "NEW" || o.status === "PREPARING",
+  const preparingOrders = useMemo(
+    () =>
+      orders.filter(
+        o =>
+          !o.status || o.status === "PENDING" || o.status === "NEW" || o.status === "PREPARING" ||
+          o.status === "HELD" || heldOrderIds.has(o.id),
+      ),
+    [orders, heldOrderIds],
+  );
+
+  const isOrderHeld = useCallback(
+    (order: any) => order.status === "HELD" || heldOrderIds.has(order.id),
+    [heldOrderIds],
   );
 
   if (loading && orders.length === 0) return <PageLoader />;
@@ -583,22 +718,22 @@ export default function KitchenPage() {
           <div className="flex items-center gap-1.5">
             <div className="flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
               <button onClick={() => setView("orders")}
-                className={`rounded-md px-2.5 py-1 text-[11px] font-black transition ${view === "orders" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+                className={`rounded-md px-3 py-2 text-[11px] font-black transition ${view === "orders" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
                 Orders
               </button>
               <button onClick={() => setView("club")}
-                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-black transition ${view === "club" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+                className={`flex items-center gap-1 rounded-md px-3 py-2 text-[11px] font-black transition ${view === "club" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
                 <Layers className="h-3 w-3" />
                 Club
               </button>
               <button onClick={() => setView("availability")}
-                className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-black transition ${view === "availability" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
+                className={`flex items-center gap-1 rounded-md px-3 py-2 text-[11px] font-black transition ${view === "availability" ? "bg-white text-gray-900 shadow-sm" : "text-gray-400"}`}>
                 <Ban className="h-3 w-3" />
                 Availability
               </button>
             </div>
             <button onClick={fetchOrders} disabled={loading}
-              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50">
+              className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-bold text-gray-700 shadow-sm transition hover:bg-gray-50 disabled:opacity-50">
               <RefreshCw className={`h-3 w-3 ${loading ? "animate-spin" : ""}`} />
               Refresh
             </button>
@@ -608,6 +743,21 @@ export default function KitchenPage() {
 
       {/* Content */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3">
+        {view === "orders" && bottleneck?.throttleSuggested && (
+          <div className="mb-3 flex items-center gap-2.5 rounded-2xl border-2 border-orange-300 bg-orange-50 px-4 py-3 shadow-sm">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-100">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+            </span>
+            <div>
+              <p className="text-xs font-black text-orange-700">
+                Kitchen at capacity (queue depth: {bottleneck.queueDepth}) — consider holding new orders.
+              </p>
+              <p className="text-[10px] font-bold text-orange-500">
+                This is advisory only — no order is held automatically.
+              </p>
+            </div>
+          </div>
+        )}
         {view === "availability" ? (
           <AvailabilityView
             items={menuItems}
@@ -618,11 +768,12 @@ export default function KitchenPage() {
             onToggle={handleToggleAvailability}
           />
         ) : preparingOrders.length === 0 && !loading ? (
-          <div className="flex h-full flex-col items-center justify-center py-16 text-center">
-            <UtensilsCrossed className="h-10 w-10 text-gray-300" />
-            <p className="mt-3 text-sm font-bold text-gray-500">No active orders</p>
-            <p className="text-xs text-gray-400">New orders will appear here automatically</p>
-          </div>
+          <EmptyState
+            icon={<UtensilsCrossed className="h-10 w-10 text-gray-300" />}
+            title="No active orders"
+            description="New orders will appear here automatically"
+            className="h-full py-16"
+          />
         ) : view === "club" ? (
           <ClubView orders={preparingOrders} processedBatches={processedBatchesRef.current} />
         ) : (
@@ -636,9 +787,12 @@ export default function KitchenPage() {
                 pendingToggles={pendingToggles}
                 onToggle={handleItemToggle}
                 skipBatchIds={processedBatchesRef.current.get(order.id)}
-                now={now}
                 onCancelApprove={handleCancelApprove}
                 onCancelReject={handleCancelReject}
+                isHeld={isOrderHeld(order)}
+                isHolding={holdingId === order.id}
+                onHold={handleHoldOrder}
+                onResume={handleResumeOrder}
               />
             ))}
           </div>

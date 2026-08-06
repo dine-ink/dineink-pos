@@ -1,12 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import {
   User, Phone, MapPin, Wallet, Percent, ShoppingBag, Info, ArrowLeft, CheckCircle, Printer,
-  Tag, Lock, Star,
+  Tag, Lock, Star, Clock, QrCode,
 } from "lucide-react";
 import { validateDiscountCode } from "@/services/discountService";
 import { verifyManagerOverride } from "@/services/authService";
 import { lookupCustomerByPhone } from "@/services/customerService";
+import { api } from "@/services/api";
 import { useAppSelector } from "@/store/hooks";
+import { formatCurrency, formatShortDate } from "@/utils/format";
+import { isNetworkError } from "@/utils/offlineQueue";
 
 type Props = {
   customerName: string; setCustomerName: any;
@@ -23,7 +26,7 @@ export default function CustomerSection({
   customerName, setCustomerName,
   customerPhone, setCustomerPhone,
   customerAddress, setCustomerAddress,
-  grand_Total, billing, setStep, onConfirm, loading = false,
+  grand_Total, billing, billingType, setStep, onConfirm, loading = false,
   orderTypeOptions, selectedOrderType, setSelectedOrderType,
 }: Props) {
   const { user } = useAppSelector((state) => state.auth);
@@ -37,6 +40,15 @@ export default function CustomerSection({
   const [lookingUpCustomer, setLookingUpCustomer] = useState(false);
   const lookupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lookedUpPhoneRef = useRef<string | null>(null);
+  // ETA hint for staff: a quiet, one-time (non-polling) fetch of the
+  // predicted ready time for whatever order type is currently active —
+  // this is a checkout screen the cashier is on briefly, so no need to
+  // keep it fresh while they're standing here.
+  const [etaPrediction, setEtaPrediction] = useState<{
+    predictedMinutes: number; historicalAvgMinutes: number; sampleSize: number; note?: string;
+  } | null>(null);
+  const currentOrderType = selectedOrderType || billingType;
+  const etaOrderType = currentOrderType === "DINE_IN" ? "DINE_IN" : "TAKEAWAY";
   // Flexible discounts: a manual % or flat ₹ amount, or a pre-configured
   // coupon code (which overrides manual entry while applied).
   const [discountMode, setDiscountMode] = useState<"PERCENT" | "FIXED">("PERCENT");
@@ -61,6 +73,16 @@ export default function CustomerSection({
     billing.paymentMethods?.[0]?.toLowerCase() || "",
   );
   const paymentMethods = billing?.paymentMethods || [];
+  // UPI QR: fetched once per checkout session, the first time the cashier
+  // selects UPI as the payment method — not polled, and not refetched on
+  // every toggle back to UPI (a failed/unconfigured branch just hides the
+  // QR card rather than showing a broken image or a scary error).
+  const [upiQr, setUpiQr] = useState<{
+    upiId: string; displayName: string; qrCodeDataUrl: string; upiLink: string;
+  } | null>(null);
+  const [upiQrLoading, setUpiQrLoading] = useState(false);
+  const [upiQrUnavailable, setUpiQrUnavailable] = useState(false);
+  const upiQrFetchedRef = useRef(false);
 
   const discountAmount = appliedCoupon
     ? appliedCoupon.discountAmount
@@ -144,7 +166,11 @@ export default function CustomerSection({
         setManagerError(res.message || "Incorrect manager password");
       }
     } catch (err: any) {
-      setManagerError(err?.response?.data?.message || "Incorrect manager password");
+      setManagerError(
+        isNetworkError(err)
+          ? "No connection — manager approval needs internet access."
+          : err?.response?.data?.message || "Incorrect manager password",
+      );
     } finally {
       setVerifyingManager(false);
     }
@@ -153,6 +179,64 @@ export default function CustomerSection({
   useEffect(() => {
     if (paymentMethods.length > 0) setPaymentMethod(paymentMethods[0].toLowerCase());
   }, [paymentMethods]);
+
+  // One-time fetch (not polling) of the predicted ETA for the current order
+  // type — just a helpful hint for staff, so a failed/slow request should
+  // silently leave the chip hidden rather than disrupt checkout.
+  useEffect(() => {
+    if (!user?.restaurantId || !user?.branchId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get(
+          `/analytics/${user.restaurantId}/${user.branchId}/eta-prediction`,
+          { params: { orderType: etaOrderType } },
+        );
+        if (!cancelled && res.data?.success) {
+          setEtaPrediction(res.data.data);
+        }
+      } catch {
+        if (!cancelled) setEtaPrediction(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [etaOrderType, user?.restaurantId, user?.branchId]);
+
+  // One-shot UPI QR fetch: fires the first time UPI becomes the selected
+  // payment method, then never again for this component's lifetime — a
+  // 400 (branch has no UPI ID configured yet) is swallowed quietly so the
+  // QR card just stays hidden instead of surfacing an alarming error.
+  useEffect(() => {
+    if (paymentMethod !== "upi") return;
+    if (upiQrFetchedRef.current) return;
+    if (!user?.restaurantId || !user?.branchId) return;
+    upiQrFetchedRef.current = true;
+    let cancelled = false;
+    (async () => {
+      setUpiQrLoading(true);
+      try {
+        const res = await api.get(
+          `/banking/upi/${user.restaurantId}/${user.branchId}/qr`,
+        );
+        if (!cancelled && res.data?.success) {
+          setUpiQr(res.data.data);
+          setUpiQrUnavailable(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setUpiQr(null);
+          setUpiQrUnavailable(true);
+        }
+      } finally {
+        if (!cancelled) setUpiQrLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [paymentMethod, user?.restaurantId, user?.branchId]);
 
   // Debounced lookup — waits for the cashier to stop typing, and only fires
   // once the number looks complete, so it doesn't spam the API on every
@@ -220,6 +304,17 @@ export default function CustomerSection({
           <h2 className="text-sm font-black text-gray-900">Checkout</h2>
           <p className="text-[10px] text-gray-500">Customer & payment details</p>
         </div>
+        {etaPrediction && (
+          etaPrediction.sampleSize >= 5 ? (
+            <span className="ml-auto flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
+              <Clock className="h-3 w-3" /> Est. ready in ~{etaPrediction.predictedMinutes} min
+            </span>
+          ) : (
+            <span className="ml-auto flex items-center gap-1 rounded-full border border-gray-100 bg-gray-50 px-2 py-1 text-[10px] font-medium text-gray-400">
+              <Clock className="h-3 w-3" /> Not enough data for an ETA estimate yet
+            </span>
+          )
+        )}
       </div>
 
       {/* BODY */}
@@ -265,9 +360,9 @@ export default function CustomerSection({
                     <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" />
                     <p className="text-[11px] font-bold text-amber-800">
                       Returning customer — {returningCustomer.visits} visit{returningCustomer.visits === 1 ? "" : "s"}
-                      {" · "}₹{returningCustomer.spend.toFixed(0)} lifetime
+                      {" · "}{formatCurrency(returningCustomer.spend)} lifetime
                       {returningCustomer.lastVisit && (
-                        <> · last visit {new Date(returningCustomer.lastVisit).toLocaleDateString()}</>
+                        <> · last visit {formatShortDate(returningCustomer.lastVisit)}</>
                       )}
                     </p>
                   </div>
@@ -278,13 +373,13 @@ export default function CustomerSection({
               <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
                 <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Billing Details</h3>
                 <div className="rounded-xl border border-gray-200 overflow-hidden">
-                  {billingRow(<span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Subtotal</span>, `₹${subtotal.toFixed(2)}`)}
+                  {billingRow(<span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Subtotal</span>, formatCurrency(subtotal))}
                   {discountAmount > 0 && billingRow(
                     <span className="flex items-center gap-1.5">
                       <Percent className="h-3 w-3" /> Discount
                       {appliedCoupon && <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-black text-emerald-700">{appliedCoupon.code}</span>}
                     </span>,
-                    <span className="text-[11px] font-bold text-red-500">-₹{discountAmount.toFixed(2)}</span>
+                    <span className="text-[11px] font-bold text-red-500">-{formatCurrency(discountAmount)}</span>
                   )}
                   {billingRow(
                     <span className="flex items-center gap-1.5"><ShoppingBag className="h-3 w-3" /> Packing</span>,
@@ -293,14 +388,14 @@ export default function CustomerSection({
                         <input type="number" value={packingCharge} onChange={(e) => setPackingCharge(Number(e.target.value))}
                           className="w-full text-[10px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       </div>
-                      <span className="text-[11px] font-bold text-gray-700">+₹{packing.toFixed(2)}</span>
+                      <span className="text-[11px] font-bold text-gray-700">+{formatCurrency(packing)}</span>
                     </div>
                   )}
                   {serviceChargePercentage > 0 && billingRow(
                     <span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Service ({serviceChargePercentage}%)</span>,
                     <div className="flex items-center gap-2">
                       <span className={`text-[11px] font-bold ${applyServiceCharge ? "text-gray-700" : "text-gray-400 line-through"}`}>
-                        +₹{((subtotal - discountAmount + packing) * serviceChargePercentage / 100).toFixed(2)}
+                        +{formatCurrency((subtotal - discountAmount + packing) * serviceChargePercentage / 100)}
                       </span>
                       <button
                         onClick={() => setApplyServiceCharge(!applyServiceCharge)}
@@ -316,11 +411,11 @@ export default function CustomerSection({
                   )}
                   {gstPercentage > 0 && billingRow(
                     `CGST (${gstPercentage / 2}%)${isGSTInclusive ? " incl." : ""}`,
-                    `${isGSTInclusive ? "" : "+"}₹${cgst.toFixed(2)}`
+                    `${isGSTInclusive ? "" : "+"}${formatCurrency(cgst)}`
                   )}
                   {gstPercentage > 0 && billingRow(
                     `SGST (${gstPercentage / 2}%)${isGSTInclusive ? " incl." : ""}`,
-                    `${isGSTInclusive ? "" : "+"}₹${sgst.toFixed(2)}`
+                    `${isGSTInclusive ? "" : "+"}${formatCurrency(sgst)}`
                   )}
                   {billingRow(
                     <span className="flex items-center gap-1.5"><Info className="h-3 w-3" /> Round Off</span>,
@@ -335,7 +430,7 @@ export default function CustomerSection({
                       {roundOff ? "✓ Applied" : "Off"}
                     </button>
                   )}
-                  {billingRow(<span className="text-sm font-black text-red-700">Grand Total</span>, <span className="text-base font-black text-red-600">₹{grandTotal.toFixed(2)}</span>, true)}
+                  {billingRow(<span className="text-sm font-black text-red-700">Grand Total</span>, <span className="text-base font-black text-red-600">{formatCurrency(grandTotal)}</span>, true)}
                 </div>
 
               </div>
@@ -346,15 +441,15 @@ export default function CustomerSection({
               {/* TOTAL PAYABLE */}
               <div className="rounded-xl bg-gradient-to-br from-red-500 to-rose-600 p-4 text-white shadow-lg shadow-red-200 xl:p-2.5">
                 <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">Total Payable</p>
-                <h1 className="mt-1 text-4xl font-black xl:text-2xl">₹{finalPayable.toFixed(0)}</h1>
+                <h1 className="mt-1 text-4xl font-black xl:text-2xl">{formatCurrency(finalPayable)}</h1>
                 {tipAmount > 0 && (
-                  <p className="mt-1 text-[11px] text-red-100">₹{grandTotal.toFixed(0)} bill + ₹{tipAmount.toFixed(0)} tip</p>
+                  <p className="mt-1 text-[11px] text-red-100">{formatCurrency(grandTotal)} bill + {formatCurrency(tipAmount)} tip</p>
                 )}
                 {splitCount > 1 && (
-                  <p className="mt-1 text-[11px] text-red-100">Split {splitCount} ways · ₹{perPersonAmount.toFixed(0)} per person</p>
+                  <p className="mt-1 text-[11px] text-red-100">Split {splitCount} ways · {formatCurrency(perPersonAmount)} per person</p>
                 )}
                 {balance > 0 && cashReceived && (
-                  <p className="mt-1 text-xs text-red-100">Balance: ₹{balance.toFixed(2)}</p>
+                  <p className="mt-1 text-xs text-red-100">Balance: {formatCurrency(balance)}</p>
                 )}
               </div>
 
@@ -480,7 +575,7 @@ export default function CustomerSection({
                     <button
                       onClick={() => setSplitCount((n) => Math.max(1, n - 1))}
                       disabled={splitCount <= 1}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
                     >
                       −
                     </button>
@@ -489,12 +584,12 @@ export default function CustomerSection({
                         {splitCount === 1 ? "No split" : `${splitCount} ways`}
                       </p>
                       {splitCount > 1 && (
-                        <p className="text-[10px] text-gray-500">₹{perPersonAmount.toFixed(2)} each</p>
+                        <p className="text-[10px] text-gray-500">{formatCurrency(perPersonAmount)} each</p>
                       )}
                     </div>
                     <button
                       onClick={() => setSplitCount((n) => Math.min(20, n + 1))}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600"
                     >
                       +
                     </button>
@@ -584,6 +679,33 @@ export default function CustomerSection({
                     );
                   })}
                 </div>
+
+                {/* UPI QR — only while UPI is the selected method; purely
+                    informational, doesn't feed into any total/calculator */}
+                {paymentMethod === "upi" && (
+                  <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                    {upiQrLoading ? (
+                      <p className="text-[10px] font-bold text-gray-400">Loading UPI QR...</p>
+                    ) : upiQr ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <img
+                          src={upiQr.qrCodeDataUrl}
+                          alt="UPI QR code"
+                          className="h-28 w-28 rounded-md border border-gray-200 bg-white p-1 xl:h-24 xl:w-24"
+                        />
+                        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-black text-gray-900">
+                          <QrCode className="h-3 w-3" /> {upiQr.displayName}
+                        </p>
+                        <p className="text-[10px] font-medium text-gray-500">{upiQr.upiId}</p>
+                        <p className="text-[9px] text-gray-400">Scan with any UPI app to pay</p>
+                      </div>
+                    ) : upiQrUnavailable ? (
+                      <p className="text-center text-[10px] font-medium text-gray-400">
+                        UPI QR not configured for this branch
+                      </p>
+                    ) : null}
+                  </div>
+                )}
               </div>
 
               {/* CASH RECEIVED & BALANCE */}
@@ -609,7 +731,7 @@ export default function CustomerSection({
                     <label className="mb-1 block text-[10px] font-bold text-gray-700">Balance Due</label>
                     <div className="flex h-8 items-center rounded-lg bg-emerald-50 px-2.5">
                       <span className="text-sm font-black text-emerald-700">
-                        ₹{balance > 0 ? balance.toFixed(2) : "0.00"}
+                        {balance > 0 ? formatCurrency(balance) : formatCurrency(0)}
                       </span>
                     </div>
                   </div>
@@ -646,7 +768,7 @@ export default function CustomerSection({
       </div>
 
       {/* MOBILE CONFIRM */}
-      <div className="xl:hidden shrink-0 flex-col border-t border-gray-100 bg-white p-2.5 flex gap-1.5">
+      <div className="xl:hidden shrink-0 flex-col border-t border-gray-100 bg-white p-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex gap-1.5">
         {discountLocked && (
           <p className="text-center text-[10px] font-bold text-amber-600">Manager approval required to confirm this discount</p>
         )}
@@ -654,7 +776,7 @@ export default function CustomerSection({
           <button
             onClick={() => onConfirm(buildConfirmPayload(false))}
             disabled={loading || discountLocked}
-            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <CheckCircle className="h-4 w-4" />
             {loading ? "..." : "Confirm"}
@@ -662,10 +784,10 @@ export default function CustomerSection({
           <button
             onClick={() => onConfirm(buildConfirmPayload(true))}
             disabled={loading || discountLocked}
-            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <Printer className="h-4 w-4" />
-            {loading ? "Placing..." : `Print · ₹${finalPayable.toFixed(0)}`}
+            {loading ? "Placing..." : `Print · ${formatCurrency(finalPayable)}`}
           </button>
         </div>
       </div>
