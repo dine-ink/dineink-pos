@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* Remap Tailwind's default red and rose color scales to owner-web's brand
    palette (#b10000 primary, #950000 and #8f0000 hover shades) so every
@@ -41,6 +42,19 @@ body,
 
 body {
   margin: 0;
+  /* Cuts the ~300ms tap delay and stray double-tap-zoom on Android
+     WebView/Chrome, and removes the default gray tap-highlight flash so
+     button presses feel instant/native instead of "web page"-ish. */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Visible keyboard-focus indicator app-wide. Only fires for keyboard/
+   programmatic focus (:focus-visible), never for mouse/touch, so it adds
+   no visual noise to click-driven interactions. */
+:focus-visible {
+  outline: 2px solid var(--color-red-400);
+  outline-offset: 2px;
 }
 
 /* Hide scrollbar utility */

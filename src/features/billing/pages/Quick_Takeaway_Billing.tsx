@@ -2,13 +2,13 @@ import MenuSection from "@/components/billing/MenuSection";
 import CartSection from "@/components/billing/CartSection";
 import CustomerSection from "@/components/billing/CustomerSection";
 import AddOnSelectorModal from "@/components/billing/AddOnSelectorModal";
-import { useMemo, useState, useEffect } from "react";
+import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import { saveRunningOrder, closeRunningOrder } from "@/services/runningOrderService";
-import { isNetworkError } from "@/utils/offlineQueue";
+import { isNetworkError, enqueueBillAction, makeId } from "@/utils/offlineQueue";
 import { PauseCircle, Play } from "lucide-react";
-import { printReceipt } from "@/utils/printer";
+import { printReceipt, type BillData } from "@/utils/printer";
 
 type HeldOrder = {
   id: string;
@@ -21,6 +21,10 @@ type HeldOrder = {
   itemCount: number;
   label: string;
 };
+
+// Stable reference so `cartAddOns[itemId] || EMPTY_ADDONS` doesn't hand out a
+// fresh array identity every render for items with no add-ons.
+const EMPTY_ADDONS: { name: string; price: number }[] = [];
 
 type Props = {
   step: string;
@@ -93,7 +97,7 @@ export default function NormalBilling({
     if (!Object.keys(cart).length) return;
     const itemCount = Object.values(cart).reduce((a, b) => a + b, 0);
     const newHeld: HeldOrder = {
-      id: Date.now().toString(),
+      id: makeId(),
       cart,
       cartNotes,
       cartAddOns,
@@ -118,7 +122,7 @@ export default function NormalBilling({
     if (Object.keys(cart).length) {
       const itemCount = Object.values(cart).reduce((a, b) => a + b, 0);
       const currentAsHeld: HeldOrder = {
-        id: Date.now().toString(),
+        id: makeId(),
         cart,
         cartNotes,
         cartAddOns,
@@ -144,61 +148,110 @@ export default function NormalBilling({
   const discardHeldOrder = (id: string) =>
     setHeldOrders((prev) => prev.filter((h) => h.id !== id));
 
-  const filteredProducts =
-    selectedCategory === "Best Sellers"
-      ? topSellingItems
-      : products.filter(
-          (p: any) =>
-            categories.find((c: any) => c.id === p.categoryId)?.name ===
-            selectedCategory,
+  // Groups the full menu by category for the accordion — "Best Sellers" is a
+  // synthetic pseudo-category (aggregated top-sellers, not a real categoryId
+  // group), so it's special-cased the same way the old single-category
+  // filter used to.
+  const productsByCategory = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const category of categories) {
+      if (category.id === "BEST_SELLERS") {
+        map.set(category.name, topSellingItems);
+      } else {
+        map.set(
+          category.name,
+          products.filter((p: any) => p.categoryId === category.id),
         );
+      }
+    }
+    return map;
+  }, [categories, products, topSellingItems]);
+
+  // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
+  const allMenuItems = useMemo(
+    () => [...products, ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id))],
+    [products, topSellingItems],
+  );
+
+  const menuItemsById = useMemo(() => {
+    const map = new Map<number, any>();
+    for (const item of allMenuItems) map.set(item.id, item);
+    return map;
+  }, [allMenuItems]);
+
+  // Kept in sync every render so increaseQty can read the *current* cart
+  // synchronously without needing `cart` in its own dependency array — that's
+  // what keeps increaseQty/decreaseQty/bumpCart referentially stable across
+  // quantity changes, so React.memo on ProductCard actually skips
+  // re-rendering every other card when one item's qty changes.
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart;
+  });
 
   // Add-ons apply once per cart line (not per unit) — the selector only
   // opens on the FIRST unit of an item that has attached groups.
-  const bumpCart = (id: number) =>
-    setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+  const bumpCart = useCallback(
+    (id: number) => setCart((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 })),
+    [],
+  );
 
-  const increaseQty = (id: number) => {
-    const alreadyInCart = !!cart[id];
-    const groups = addOnMap[id];
-    if (!alreadyInCart && groups?.length) {
-      const product = allMenuItems.find((p: any) => p.id === id);
-      setAddOnModal(product || { id, name: "Item" });
-      return;
-    }
-    bumpCart(id);
-  };
-
-  const decreaseQty = (id: number) =>
-    setCart((prev) => {
-      if ((prev[id] || 0) <= 1) {
-        const u = { ...prev };
-        delete u[id];
-        setCartAddOns((p) => {
-          const next = { ...p };
-          delete next[id];
-          return next;
-        });
-        return u;
+  const increaseQty = useCallback(
+    (id: number) => {
+      const alreadyInCart = !!cartRef.current[id];
+      const groups = addOnMap[id];
+      if (!alreadyInCart && groups?.length) {
+        const product = menuItemsById.get(id);
+        setAddOnModal(product || { id, name: "Item" });
+        return;
       }
-      return { ...prev, [id]: prev[id] - 1 };
-    });
+      bumpCart(id);
+    },
+    [addOnMap, menuItemsById, bumpCart],
+  );
 
-  const confirmAddOns = (selected: { name: string; price: number }[]) => {
-    if (!addOnModal) return;
-    if (selected.length) setCartAddOns((prev) => ({ ...prev, [addOnModal.id]: selected }));
-    bumpCart(addOnModal.id);
-    setAddOnModal(null);
-  };
+  const decreaseQty = useCallback(
+    (id: number) =>
+      setCart((prev) => {
+        if ((prev[id] || 0) <= 1) {
+          const u = { ...prev };
+          delete u[id];
+          setCartAddOns((p) => {
+            const next = { ...p };
+            delete next[id];
+            return next;
+          });
+          return u;
+        }
+        return { ...prev, [id]: prev[id] - 1 };
+      }),
+    [],
+  );
+
+  const confirmAddOns = useCallback(
+    (selected: { name: string; price: number }[]) => {
+      setAddOnModal((current: any) => {
+        if (!current) return null;
+        if (selected.length) {
+          setCartAddOns((prev) => ({ ...prev, [current.id]: selected }));
+        }
+        bumpCart(current.id);
+        return null;
+      });
+    },
+    [bumpCart],
+  );
 
   const totalItems = Object.values(cart).reduce((acc, qty) => acc + qty, 0);
-  // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
-  const allMenuItems = [...products, ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id))];
-  const cartItems = allMenuItems.filter((p) => cart[p.id]);
+  const cartItems = useMemo(
+    () => allMenuItems.filter((p) => cart[p.id]),
+    [allMenuItems, cart],
+  );
   const addOnUnitTotal = (itemId: number) =>
-    (cartAddOns[itemId] || []).reduce((s, a) => s + a.price, 0);
+    (cartAddOns[itemId] || EMPTY_ADDONS).reduce((s, a) => s + a.price, 0);
   const grandTotal = useMemo(
     () => cartItems.reduce((acc, item) => acc + (item.price + addOnUnitTotal(item.id)) * cart[item.id], 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [cartItems, cart, cartAddOns],
   );
 
@@ -249,39 +302,68 @@ export default function NormalBilling({
       // kitchen; it closes itself out once marked READY.
       let billNo: string | null = null;
       if (!saveResponse.queuedOffline && saveResponse.data?.id) {
+        const closeBody = {
+          runningOrderId: saveResponse.data.id,
+          customerName,
+          customerPhone,
+          paymentMethod: billingData.paymentMethod,
+          orderType: selectedOrderType,
+          orderStatus: "CONFIRMED",
+          keepOrderActive: true,
+          subtotal: grandTotal,
+          discountAmount: billingData.discountAmount,
+          discountType: billingData.discountType,
+          discountCode: billingData.discountCode,
+          discountApprovedById: billingData.discountApprovedById,
+          packingCharge: billingData.packingCharge,
+          serviceCharge: billingData.serviceChargeAmount,
+          gstAmount: billingData.gstAmount,
+          cgst: billingData.cgst,
+          sgst: billingData.sgst,
+          finalAmount: billingData.grandTotal,
+          tipAmount: billingData.tipAmount,
+        };
         try {
-          const billResponse = await closeRunningOrder({
-            runningOrderId: saveResponse.data.id,
-            customerName,
-            customerPhone,
-            paymentMethod: billingData.paymentMethod,
-            orderType: selectedOrderType,
-            orderStatus: "CONFIRMED",
-            keepOrderActive: true,
-            subtotal: grandTotal,
-            discountAmount: billingData.discountAmount,
-            discountType: billingData.discountType,
-            discountCode: billingData.discountCode,
-            discountApprovedById: billingData.discountApprovedById,
-            packingCharge: billingData.packingCharge,
-            serviceCharge: billingData.serviceChargeAmount,
-            gstAmount: billingData.gstAmount,
-            cgst: billingData.cgst,
-            sgst: billingData.sgst,
-            finalAmount: billingData.grandTotal,
-            tipAmount: billingData.tipAmount,
-          });
+          const billResponse = await closeRunningOrder(closeBody);
           if (billResponse.success) billNo = billResponse.data?.billNo ?? null;
           else toast.error(billResponse.message || "Order sent to kitchen, but billing failed — complete it from Orders.");
         } catch (err: any) {
-          // The KOT is already placed either way — if billing fails (e.g.
-          // connection dropped between the two calls), staff can still
-          // finish it manually from the Orders page's "Complete" button.
-          toast.error(
-            isNetworkError(err)
-              ? "Order sent to kitchen — no connection to bill it now, complete it from Orders once reconnected."
-              : "Order sent to kitchen, but billing failed — complete it from Orders.",
-          );
+          // The KOT is already placed either way. On a genuine connectivity
+          // failure between the two calls, queue the invoice itself — same
+          // fallback DineIn billing already uses — instead of leaving it for
+          // a human to notice and finish manually from Orders.
+          if (isNetworkError(err)) {
+            const receiptMeta: Omit<BillData, "billNo"> = {
+              shopName: branchData?.restaurant?.name || user?.restaurant?.name || "Restaurant",
+              shopAddress: branchData?.address || user?.branch?.address,
+              shopGstin: branchData?.restaurant?.gstNumber || user?.restaurant?.gstNumber,
+              customerName,
+              billingType: selectedOrderType,
+              paymentMethod: billingData.paymentMethod,
+              items,
+              subtotal: grandTotal,
+              discountAmount: billingData.discountAmount,
+              cgst: billingData.cgst,
+              sgst: billingData.sgst,
+              serviceChargeAmount: billingData.serviceChargeAmount,
+              packingCharge: billingData.packingCharge,
+              grandTotal: billingData.grandTotal,
+              tipAmount: billingData.tipAmount,
+            };
+            const action = enqueueBillAction(
+              "/running-orders/closeRunningOrder",
+              closeBody,
+              receiptMeta,
+              `Bill for ${customerName || "walk-in"} (${items.length} item(s))`,
+            );
+            billNo = action.billMeta!.provisionalBillNo;
+            toast(
+              `No connection — bill saved offline as ${billNo}. The official invoice will print automatically once this syncs.`,
+              { icon: "📴", duration: 6000 },
+            );
+          } else {
+            toast.error("Order sent to kitchen, but billing failed — complete it from Orders.");
+          }
         }
       }
 
@@ -374,7 +456,7 @@ export default function NormalBilling({
                 categories={categories}
                 selectedCategory={selectedCategory}
                 setSelectedCategory={setSelectedCategory}
-                filteredProducts={filteredProducts}
+                productsByCategory={productsByCategory}
                 activeCart={cart}
                 increaseQty={increaseQty}
                 decreaseQty={decreaseQty}

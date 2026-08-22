@@ -9,6 +9,7 @@ import { getRestaurantAddOnAttachments } from "@/services/addonService";
 import PageLoader from "@/components/ui/PageLoader";
 import PrinterSetupModal from "@/components/PrinterSetupModal";
 import { getSavedPrinter } from "@/utils/printer";
+import { usePolling } from "@/hooks/usePolling";
 import { Printer } from "lucide-react";
 
 export default function BillingPage() {
@@ -68,17 +69,17 @@ export default function BillingPage() {
   }, [user?.branchId, fetchData]);
 
   // Keep running-orders fresh so table colours update without full reload
-  useEffect(() => {
-    if (!user?.restaurantId || !user?.branchId) return;
-    const poll = async () => {
+  usePolling(
+    async () => {
+      if (!user?.restaurantId || !user?.branchId) return;
       try {
         const ordersData = await getAllRunningOrders(user.restaurantId, user.branchId);
         setRunningOrders(ordersData.data || []);
       } catch { /* silent */ }
-    };
-    const id = setInterval(poll, 30000);
-    return () => clearInterval(id);
-  }, [user?.restaurantId, user?.branchId]);
+    },
+    30000,
+    [user?.restaurantId, user?.branchId],
+  );
 
   useEffect(() => {
     const billingTypes = branchData?.billing?.billingTypes || [];

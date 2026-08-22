@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { X, Check } from "lucide-react";
 
 type AddOnOption = { id: number; name: string; price: number };
@@ -14,7 +14,7 @@ type Props = {
 // Optional, multi-select add-ons only (e.g. "Extra Cheese +₹40") — applied
 // once per cart line, not per unit, to keep the cart's simple qty-counter
 // model intact for the common case of items with no add-ons at all.
-export default function AddOnSelectorModal({ itemName, groups, onConfirm, onCancel }: Props) {
+function AddOnSelectorModal({ itemName, groups, onConfirm, onCancel }: Props) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const toggle = (id: number) =>
@@ -110,3 +110,5 @@ export default function AddOnSelectorModal({ itemName, groups, onConfirm, onCanc
     </div>
   );
 }
+
+export default memo(AddOnSelectorModal);

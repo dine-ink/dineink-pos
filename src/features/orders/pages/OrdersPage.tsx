@@ -1,15 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import { MagnifyingGlassIcon, PrinterIcon } from "@heroicons/react/24/solid";
 import PageLoader from "@/components/ui/PageLoader";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { api } from "@/services/api";
 import { cancelBill, refundBill } from "@/services/runningOrderService";
 import { createBill } from "@/services/billService";
 import { getSavedPrinter, printReceipt, type BillData } from "@/utils/printer";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { isNetworkError } from "@/utils/offlineQueue";
+import { formatCurrency, formatTime } from "@/utils/format";
 
 const TYPE_BADGE: Record<string, string> = {
   DINE_IN: "bg-blue-100 text-blue-700",
@@ -34,6 +38,153 @@ const getStatusBadge = (s: string) =>
 const customerDisplay = (order: any) =>
   typeof order.customer === "object" ? order.customer?.name || "Walk-in" : order.customer || "Walk-in";
 
+type OrderRowProps = {
+  order: any;
+  canPrint: boolean;
+  canRefund: boolean;
+  canVoid: boolean;
+  completing: number | null;
+  voiding: number | null;
+  onDirectPrint: (order: any) => void;
+  onCompleteOrder: (order: any) => void;
+  onOpenRefund: (order: any) => void;
+  onVoidBill: (order: any) => void;
+};
+
+// Extracted + memoized so an unrelated re-render (e.g. the search box, or a
+// different row's action) doesn't force every row to re-render — matters
+// most here since both the mobile cards and desktop table mount the full
+// list simultaneously (visibility toggled via CSS, not conditional render).
+function OrderMobileCardBase({
+  order, canPrint, canRefund, canVoid, completing, voiding,
+  onDirectPrint, onCompleteOrder, onOpenRefund, onVoidBill,
+}: OrderRowProps) {
+  return (
+    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-xs font-black text-gray-900">{order.orderNo}</p>
+          <p className="text-[10px] text-gray-500">
+            {order.createdAt ? formatTime(order.createdAt) : "—"} · {order.table || "—"}
+          </p>
+        </div>
+        <StatusBadge tone={getTypeBadge(order.orderType)} size="sm">
+          {order.orderType?.replace("_", " ")}
+        </StatusBadge>
+      </div>
+      <div className="mt-2 flex items-center justify-between">
+        <div>
+          <p className="text-[10px] text-gray-500">Customer</p>
+          <p className="text-xs font-bold text-gray-900">{customerDisplay(order)}</p>
+        </div>
+        <p className="text-lg font-black text-red-600">{formatCurrency(order.total)}</p>
+      </div>
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+        <div className="flex flex-wrap gap-1">
+          <StatusBadge tone={getPayBadge(order.paymentStatus)} size="sm">
+            {order.paymentStatus || "UNPAID"}
+          </StatusBadge>
+          <StatusBadge tone={getStatusBadge(order.orderStatus)} size="sm">
+            {order.orderStatus}
+          </StatusBadge>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => onDirectPrint(order)}
+            disabled={!canPrint}
+            title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
+            className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
+            <PrinterIcon className="h-3.5 w-3.5" />
+          </button>
+          {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
+            <button onClick={() => onCompleteOrder(order)}
+              disabled={completing === order.id}
+              className="rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
+              {completing === order.id ? "..." : "Complete"}
+            </button>
+          )}
+          {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
+            <button onClick={() => onOpenRefund(order)}
+              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-amber-600">
+              Refund
+            </button>
+          )}
+          {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
+            <button onClick={() => onVoidBill(order)}
+              disabled={voiding === order.id}
+              className="ml-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
+              {voiding === order.id ? "Voiding…" : "Void"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+const OrderMobileCard = memo(OrderMobileCardBase);
+
+function OrderTableRowBase({
+  order, index, canPrint, canRefund, canVoid, completing, voiding,
+  onDirectPrint, onCompleteOrder, onOpenRefund, onVoidBill,
+}: OrderRowProps & { index: number }) {
+  return (
+    <tr className={`border-b border-gray-100 transition hover:bg-red-50/50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
+      <td className="px-3 py-2 text-xs font-bold text-gray-800">{order.orderNo}</td>
+      <td className="px-3 py-2 text-xs text-gray-600">{order.createdAt ? formatTime(order.createdAt) : "—"}</td>
+      <td className="px-3 py-2 text-xs font-semibold text-gray-900">{customerDisplay(order)}</td>
+      <td className="px-3 py-2">
+        <StatusBadge tone={getTypeBadge(order.orderType)} size="md">{order.orderType}</StatusBadge>
+      </td>
+      <td className="px-3 py-2 text-xs text-gray-600">{order.table || "—"}</td>
+      <td className="px-3 py-2 text-xs text-gray-600">{order.items?.length || 0} items</td>
+      <td className="px-3 py-2">
+        <StatusBadge tone="bg-emerald-100 text-emerald-700" size="md">{order.paymentMethod || "—"}</StatusBadge>
+      </td>
+      <td className="px-3 py-2 text-right">
+        <p className="text-sm font-black text-red-600">{formatCurrency(order.total)}</p>
+      </td>
+      <td className="px-3 py-2">
+        <StatusBadge tone={getPayBadge(order.paymentStatus)} size="md">{order.paymentStatus || "UNPAID"}</StatusBadge>
+      </td>
+      <td className="px-3 py-2">
+        <StatusBadge tone={getStatusBadge(order.orderStatus)} size="md">{order.orderStatus}</StatusBadge>
+      </td>
+      <td className="px-3 py-2">
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => onDirectPrint(order)}
+            disabled={!canPrint}
+            title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
+            className={`flex h-6 w-6 items-center justify-center rounded-md transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
+            <PrinterIcon className="h-3 w-3" />
+          </button>
+          {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
+            <button onClick={() => onCompleteOrder(order)}
+              disabled={completing === order.id}
+              className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
+              {completing === order.id ? "..." : "Complete"}
+            </button>
+          )}
+          {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
+            <button onClick={() => onOpenRefund(order)}
+              className="rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-amber-600">
+              Refund
+            </button>
+          )}
+          {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
+            <button onClick={() => onVoidBill(order)}
+              disabled={voiding === order.id}
+              className="ml-1 rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
+              {voiding === order.id ? "Voiding…" : "Void"}
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+const OrderTableRow = memo(OrderTableRowBase);
+
 export default function OrderHistory() {
   const [search, setSearch] = useState("");
   const [orders, setOrders] = useState<any[]>([]);
@@ -45,6 +196,7 @@ export default function OrderHistory() {
   const [refundAmount, setRefundAmount] = useState("");
   const [refundReason, setRefundReason] = useState("");
   const [refunding, setRefunding] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<any>(null);
   const { user } = useAppSelector((state) => state.auth);
   const isOnline = useOnlineStatus();
   // On web/laptop the browser print dialog handles USB printers — always enabled
@@ -58,7 +210,7 @@ export default function OrderHistory() {
     setHasPrinter(!!getSavedPrinter());
   }, []);
 
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     if (!user?.restaurantId || !user?.branchId) return;
     try {
       setLoading(true);
@@ -69,7 +221,7 @@ export default function OrderHistory() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.restaurantId, user?.branchId]);
 
   useEffect(() => {
     if (user?.restaurantId && user?.branchId) fetchOrders();
@@ -87,7 +239,7 @@ export default function OrderHistory() {
     });
   }, [orders, search]);
 
-  const completeOrderOffline = async (order: any, resolvedCustomerName: string) => {
+  const completeOrderOffline = useCallback(async (order: any, resolvedCustomerName: string) => {
     // Offline — this order's item/tax breakdown is already in local state
     // (from getBillsService), so build the bill directly rather than
     // depending on a fresh server read of the RunningOrder.
@@ -148,9 +300,9 @@ export default function OrderHistory() {
     } else {
       toast.error((response as any).message || "Couldn't complete this order.");
     }
-  };
+  }, [user, fetchOrders]);
 
-  const handleCompleteOrder = async (order: any) => {
+  const handleCompleteOrder = useCallback(async (order: any) => {
     // Guards against the double-click/slow-refresh duplicate-billing bug —
     // a second click while the first is still in flight now no-ops here
     // instead of reaching the backend and creating a second Bill.
@@ -193,35 +345,38 @@ export default function OrderHistory() {
     } finally {
       setCompleting(null);
     }
-  };
+  }, [completing, isOnline, completeOrderOffline]);
 
-  const handleVoidBill = async (order: any) => {
-    if (
-      !window.confirm(
-        `Void bill ${order.orderNo} for ₹${Number(order.total || 0).toFixed(2)}? This cannot be undone.`,
-      )
-    )
-      return;
+  // Opens the confirm modal below rather than voiding immediately — replaces
+  // the previous window.confirm (unstyled, can't be dismissed by tapping
+  // outside, blocks the whole WebView on Android).
+  const handleVoidBill = useCallback((order: any) => {
+    setVoidTarget(order);
+  }, []);
+
+  const confirmVoidBill = async () => {
+    if (!voidTarget) return;
     try {
-      setVoiding(order.id);
-      const res = await cancelBill(order.id);
+      setVoiding(voidTarget.id);
+      const res = await cancelBill(voidTarget.id);
       if (res.success) {
+        setVoidTarget(null);
         fetchOrders();
       } else {
-        alert(res.message || "Failed to void bill");
+        toast.error(res.message || "Failed to void bill");
       }
     } catch (err: any) {
-      alert(err?.response?.data?.message || "Failed to void bill");
+      toast.error(err?.response?.data?.message || "Failed to void bill");
     } finally {
       setVoiding(null);
     }
   };
 
-  const openRefundModal = (order: any) => {
+  const openRefundModal = useCallback((order: any) => {
     setRefundOrder(order);
     setRefundAmount("");
     setRefundReason("");
-  };
+  }, []);
 
   const handleSubmitRefund = async () => {
     if (!refundOrder) return;
@@ -231,7 +386,7 @@ export default function OrderHistory() {
       return;
     }
     if (amount > Number(refundOrder.total || 0)) {
-      toast.error(`Refund can't exceed ₹${Number(refundOrder.total || 0).toFixed(2)}.`);
+      toast.error(`Refund can't exceed ${formatCurrency(refundOrder.total)}.`);
       return;
     }
     try {
@@ -242,7 +397,7 @@ export default function OrderHistory() {
         createdById: user?.id,
       });
       if (res.success) {
-        toast.success(`Refunded ₹${amount.toFixed(2)}`);
+        toast.success(`Refunded ${formatCurrency(amount)}`);
         setRefundOrder(null);
         fetchOrders();
       } else {
@@ -255,7 +410,7 @@ export default function OrderHistory() {
     }
   };
 
-  const handleDirectPrint = async (order: any) => {
+  const handleDirectPrint = useCallback(async (order: any) => {
     const isReprint = order.orderStatus === "COMPLETED";
     const bill: BillData = {
       shopName: user?.restaurant?.name || user?.branch?.name || "Restaurant",
@@ -287,7 +442,7 @@ export default function OrderHistory() {
     } else {
       toast.error("Print failed — check the printer connection.");
     }
-  };
+  }, [user]);
 
   if (loading) return <PageLoader />;
 
@@ -314,71 +469,22 @@ export default function OrderHistory() {
         {/* MOBILE CARDS */}
         <div className="space-y-2 xl:hidden">
           {filteredOrders.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <span className="text-3xl">📋</span>
-              <p className="mt-2 text-sm font-bold text-gray-700">No orders found</p>
-            </div>
+            <EmptyState icon={<span className="text-3xl">📋</span>} title="No orders found" className="py-12" />
           )}
           {filteredOrders.map((order) => (
-            <div key={`${order.source}-${order.id}`} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <p className="text-xs font-black text-gray-900">{order.orderNo}</p>
-                  <p className="text-[10px] text-gray-500">
-                    {order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : "—"} · {order.table || "—"}
-                  </p>
-                </div>
-                <span className={`rounded-full px-2 py-0.5 text-[9px] font-black ${getTypeBadge(order.orderType)}`}>
-                  {order.orderType?.replace("_", " ")}
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] text-gray-500">Customer</p>
-                  <p className="text-xs font-bold text-gray-900">{customerDisplay(order)}</p>
-                </div>
-                <p className="text-lg font-black text-red-600">₹{Number(order.total || 0).toFixed(2)}</p>
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
-                <div className="flex flex-wrap gap-1">
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${getPayBadge(order.paymentStatus)}`}>
-                    {order.paymentStatus || "UNPAID"}
-                  </span>
-                  <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-black ${getStatusBadge(order.orderStatus)}`}>
-                    {order.orderStatus}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleDirectPrint(order)}
-                    disabled={!canPrint}
-                    title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
-                    className={`flex h-7 w-7 items-center justify-center rounded-lg transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
-                    <PrinterIcon className="h-3.5 w-3.5" />
-                  </button>
-                  {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
-                    <button onClick={() => handleCompleteOrder(order)}
-                      disabled={completing === order.id}
-                      className="rounded-lg bg-emerald-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
-                      {completing === order.id ? "..." : "Complete"}
-                    </button>
-                  )}
-                  {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
-                    <button onClick={() => openRefundModal(order)}
-                      className="rounded-lg bg-amber-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-amber-600">
-                      Refund
-                    </button>
-                  )}
-                  {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
-                    <button onClick={() => handleVoidBill(order)}
-                      disabled={voiding === order.id}
-                      className="rounded-lg bg-red-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
-                      {voiding === order.id ? "Voiding…" : "Void"}
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
+            <OrderMobileCard
+              key={`${order.source}-${order.id}`}
+              order={order}
+              canPrint={canPrint}
+              canRefund={canRefund}
+              canVoid={canVoid}
+              completing={completing}
+              voiding={voiding}
+              onDirectPrint={handleDirectPrint}
+              onCompleteOrder={handleCompleteOrder}
+              onOpenRefund={openRefundModal}
+              onVoidBill={handleVoidBill}
+            />
           ))}
         </div>
 
@@ -398,125 +504,71 @@ export default function OrderHistory() {
               </thead>
               <tbody>
                 {filteredOrders.map((order, index) => (
-                  <tr key={`${order.source}-${order.id}`}
-                    className={`border-b border-gray-100 transition hover:bg-red-50/50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
-                    <td className="px-3 py-2 text-xs font-bold text-gray-800">{order.orderNo}</td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{order.createdAt ? new Date(order.createdAt).toLocaleTimeString() : "—"}</td>
-                    <td className="px-3 py-2 text-xs font-semibold text-gray-900">{customerDisplay(order)}</td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getTypeBadge(order.orderType)}`}>{order.orderType}</span>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{order.table || "—"}</td>
-                    <td className="px-3 py-2 text-xs text-gray-600">{order.items?.length || 0} items</td>
-                    <td className="px-3 py-2">
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{order.paymentMethod || "—"}</span>
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      <p className="text-sm font-black text-red-600">₹{Number(order.total || 0).toFixed(2)}</p>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getPayBadge(order.paymentStatus)}`}>{order.paymentStatus || "UNPAID"}</span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${getStatusBadge(order.orderStatus)}`}>{order.orderStatus}</span>
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          onClick={() => handleDirectPrint(order)}
-                          disabled={!canPrint}
-                          title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
-                          className={`flex h-6 w-6 items-center justify-center rounded-md transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
-                          <PrinterIcon className="h-3 w-3" />
-                        </button>
-                        {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
-                          <button onClick={() => handleCompleteOrder(order)}
-                            disabled={completing === order.id}
-                            className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
-                            {completing === order.id ? "..." : "Complete"}
-                          </button>
-                        )}
-                        {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
-                          <button onClick={() => openRefundModal(order)}
-                            className="rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-amber-600">
-                            Refund
-                          </button>
-                        )}
-                        {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
-                          <button onClick={() => handleVoidBill(order)}
-                            disabled={voiding === order.id}
-                            className="rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
-                            {voiding === order.id ? "Voiding…" : "Void"}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
+                  <OrderTableRow
+                    key={`${order.source}-${order.id}`}
+                    order={order}
+                    index={index}
+                    canPrint={canPrint}
+                    canRefund={canRefund}
+                    canVoid={canVoid}
+                    completing={completing}
+                    voiding={voiding}
+                    onDirectPrint={handleDirectPrint}
+                    onCompleteOrder={handleCompleteOrder}
+                    onOpenRefund={openRefundModal}
+                    onVoidBill={handleVoidBill}
+                  />
                 ))}
               </tbody>
             </table>
             {filteredOrders.length === 0 && (
-              <div className="flex flex-col items-center justify-center py-16 text-center">
-                <span className="text-3xl">📋</span>
-                <p className="mt-3 text-sm font-bold text-gray-700">No orders found</p>
-              </div>
+              <EmptyState icon={<span className="text-3xl">📋</span>} title="No orders found" className="py-16" />
             )}
           </div>
         </div>
       </div>
 
       {/* REFUND MODAL */}
-      {refundOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-gray-900">
-                Refund {refundOrder.orderNo}
-              </h3>
-              <button onClick={() => setRefundOrder(null)} className="text-gray-400 hover:text-gray-600">
-                ✕
-              </button>
-            </div>
-            <p className="mt-1 text-[11px] text-gray-500">
-              Bill total: ₹{Number(refundOrder.total || 0).toFixed(2)}
-            </p>
+      <ConfirmDialog
+        open={!!refundOrder}
+        title={refundOrder ? `Refund ${refundOrder.orderNo}` : ""}
+        description={refundOrder ? `Bill total: ${formatCurrency(refundOrder.total)}` : null}
+        showCloseIcon
+        tone="warning"
+        confirmLabel={refunding ? "Processing…" : "Confirm Refund"}
+        confirmDisabled={refunding}
+        onConfirm={handleSubmitRefund}
+        onCancel={() => setRefundOrder(null)}
+      >
+        <label className="mt-3 block text-[11px] font-bold text-gray-700">Refund Amount (₹)</label>
+        <input
+          type="number"
+          value={refundAmount}
+          onChange={(e) => setRefundAmount(e.target.value)}
+          placeholder="0.00"
+          className="mt-1 h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-amber-400"
+        />
 
-            <label className="mt-3 block text-[11px] font-bold text-gray-700">Refund Amount (₹)</label>
-            <input
-              type="number"
-              value={refundAmount}
-              onChange={(e) => setRefundAmount(e.target.value)}
-              placeholder="0.00"
-              className="mt-1 h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-amber-400"
-            />
+        <label className="mt-3 block text-[11px] font-bold text-gray-700">Reason (optional)</label>
+        <textarea
+          value={refundReason}
+          onChange={(e) => setRefundReason(e.target.value)}
+          placeholder="e.g. customer complaint about a dish"
+          rows={2}
+          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+        />
+      </ConfirmDialog>
 
-            <label className="mt-3 block text-[11px] font-bold text-gray-700">Reason (optional)</label>
-            <textarea
-              value={refundReason}
-              onChange={(e) => setRefundReason(e.target.value)}
-              placeholder="e.g. customer complaint about a dish"
-              rows={2}
-              className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
-            />
-
-            <div className="mt-4 flex gap-2">
-              <button
-                onClick={() => setRefundOrder(null)}
-                className="flex-1 rounded-lg border border-gray-200 bg-white py-2 text-xs font-bold text-gray-700"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSubmitRefund}
-                disabled={refunding}
-                className="flex-1 rounded-lg bg-amber-500 py-2 text-xs font-bold text-white transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {refunding ? "Processing…" : "Confirm Refund"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* VOID CONFIRM MODAL */}
+      <ConfirmDialog
+        open={!!voidTarget}
+        title={voidTarget ? `Void bill ${voidTarget.orderNo}?` : ""}
+        description={voidTarget ? `${formatCurrency(voidTarget.total)} — this cannot be undone.` : null}
+        confirmLabel={voidTarget && voiding === voidTarget.id ? "Voiding…" : "Void Bill"}
+        confirmDisabled={!!voidTarget && voiding === voidTarget.id}
+        onConfirm={confirmVoidBill}
+        onCancel={() => setVoidTarget(null)}
+      />
     </div>
   );
 }

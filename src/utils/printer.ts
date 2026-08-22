@@ -177,6 +177,23 @@ function toAscii(s: string): string {
   return s.replace(/[₹]/g, "Rs.").replace(/[^\x01-\x7F]/g, "?");
 }
 
+function receiptDateString(d: Date): string {
+  return d.toLocaleDateString("en-IN");
+}
+
+function receiptTimeString(d: Date): string {
+  return d.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
+}
+
+function receiptTimeShort(d: Date): string {
+  return d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
 // ─── Bill data type ───────────────────────────────────────────────────────────
 
 export type BillData = {
@@ -240,16 +257,8 @@ function buildReceipt(bill: BillData): string {
   /* ---------- DETAILS ---------- */
 
   r += padded("Bill No", bill.billNo);
-  r += padded("Date", now.toLocaleDateString("en-IN"));
-  r += padded(
-    "Time",
-    now.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: true,
-    }),
-  );
+  r += padded("Date", receiptDateString(now));
+  r += padded("Time", receiptTimeString(now));
   r += padded("Customer", toAscii(bill.customerName || "Walk-in"));
   r += padded("Order Type", fmtLabel(bill.billingType));
   r += padded("Payment", fmtLabel(bill.paymentMethod));
@@ -470,11 +479,8 @@ async function printWifi(
 
 function buildTestReceipt(): string {
   const now = new Date();
-  const date = now.toLocaleDateString("en-IN");
-  const time = now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const date = receiptDateString(now);
+  const time = receiptTimeShort(now);
   let r = "";
   r += CMD.init;
   r += CMD.center + CMD.boldOn + ln("DINEINK POS");
@@ -555,13 +561,8 @@ function escHtml(s: string): string {
 
 function printReceiptBrowser(bill: BillData): void {
   const now = new Date();
-  const dateStr = now.toLocaleDateString("en-IN");
-  const timeStr = now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
+  const dateStr = receiptDateString(now);
+  const timeStr = receiptTimeString(now);
 
   const drow = (l: string, v: string) =>
     `<div class="row"><span class="lbl">${l}</span><span class="val">${v}</span></div>`;

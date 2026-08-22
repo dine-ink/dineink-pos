@@ -8,6 +8,8 @@ import {
   getShiftSalesSummary,
 } from "@/services/cashService";
 import { Wallet, LockOpen, Lock, RefreshCw, AlertTriangle, Receipt, Printer, Users } from "lucide-react";
+import { formatCurrency, formatLongDate, formatTime } from "@/utils/format";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 
 export default function CashSession() {
   const { user } = useAppSelector((state) => state.auth);
@@ -25,6 +27,7 @@ export default function CashSession() {
   const [closeNotes, setCloseNotes] = useState("");
   const [closeLoading, setCloseLoading] = useState(false);
   const [shiftSummary, setShiftSummary] = useState<any>(null);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // Other cashiers' currently-open sessions on this branch — informational
   // only (each cashier only opens/closes/sees their own drawer).
@@ -52,6 +55,7 @@ export default function CashSession() {
       setOpenSession(all.find((s) => s.status === "OPEN" && s.openedById === user?.id) ?? null);
     } catch (err) {
       console.error(err);
+      toast.error("Couldn't load cash sessions — check your connection.");
     } finally {
       setLoading(false);
     }
@@ -66,7 +70,9 @@ export default function CashSession() {
   // what the shift actually sold. Scoped to THIS session's own open→now
   // window server-side, not the whole business day.
   useEffect(() => {
-    if (!openSession) {
+    // A queued-offline session has no real ID yet — nothing to summarize
+    // server-side until it syncs.
+    if (!openSession?.id) {
       setShiftSummary(null);
       return;
     }
@@ -79,7 +85,7 @@ export default function CashSession() {
     if (!user || !openingCash) return;
     try {
       setOpenLoading(true);
-      await openCashSession({
+      const res = await openCashSession({
         branchId:     user.branchId,
         restaurantId: user.restaurantId,
         openedById:   user.id,
@@ -88,7 +94,23 @@ export default function CashSession() {
       });
       setOpeningCash("");
       setOpenNotes("");
-      await fetchSessions();
+      if (res?.queuedOffline) {
+        // No connection — show the session as open locally right away (the
+        // cashier needs to keep taking cash) using a placeholder with no
+        // real ID yet; it'll sync automatically and a manual refresh once
+        // reconnected picks up the real, closeable record.
+        toast("No connection — cash session opened offline, will sync automatically.", { icon: "📴", duration: 5000 });
+        setOpenSession({
+          openedAt: new Date().toISOString(),
+          openedBy: { name: user.name },
+          openingCash: Number(openingCash),
+          openedById: user.id,
+          status: "OPEN",
+          queuedOffline: true,
+        });
+      } else {
+        await fetchSessions();
+      }
     } catch (err: any) {
       toast.error(err?.response?.data?.message || "Couldn't open a cash session.");
     } finally {
@@ -100,6 +122,7 @@ export default function CashSession() {
     if (!openSession || !actualCash || !user) return;
     try {
       setCloseLoading(true);
+      setConfirmingClose(false);
       // Preview of expected cash for the receipt/print — the server
       // recomputes this authoritatively from THIS session's own bills.
       const expectedCash = liveExpectedCash;
@@ -151,7 +174,7 @@ export default function CashSession() {
       ? data.actualCash - data.expectedCash
       : null;
     const payRows = (data.shiftSummary?.paymentBreakdown || [])
-      .map((p: any) => `<tr><td>${p.method}</td><td style="text-align:right">₹${Number(p.amount).toLocaleString()}</td><td style="text-align:right">${p.count}</td></tr>`)
+      .map((p: any) => `<tr><td>${p.method}</td><td style="text-align:right">${formatCurrency(p.amount)}</td><td style="text-align:right">${p.count}</td></tr>`)
       .join("");
     pw.document.write(`<html><head><title>${data.isFinal ? "Z-Report" : "X-Report"}</title>
 <style>
@@ -174,16 +197,16 @@ td{padding:2px 0;vertical-align:top}
 </table>
 <div class="d"></div>
 <table>
-  <tr><td>Opening Cash</td><td style="text-align:right">₹${Number(data.openingCash).toLocaleString()}</td></tr>
-  ${data.expectedCash != null ? `<tr><td>Expected Cash</td><td style="text-align:right">₹${Number(data.expectedCash).toLocaleString()}</td></tr>` : ""}
-  ${data.actualCash != null ? `<tr><td>Actual Cash</td><td style="text-align:right">₹${Number(data.actualCash).toLocaleString()}</td></tr>` : ""}
-  ${diff != null ? `<tr><td><b>Difference</b></td><td style="text-align:right"><b>${diff >= 0 ? "+" : ""}₹${diff.toLocaleString()}</b></td></tr>` : ""}
+  <tr><td>Opening Cash</td><td style="text-align:right">${formatCurrency(data.openingCash)}</td></tr>
+  ${data.expectedCash != null ? `<tr><td>Expected Cash</td><td style="text-align:right">${formatCurrency(data.expectedCash)}</td></tr>` : ""}
+  ${data.actualCash != null ? `<tr><td>Actual Cash</td><td style="text-align:right">${formatCurrency(data.actualCash)}</td></tr>` : ""}
+  ${diff != null ? `<tr><td><b>Difference</b></td><td style="text-align:right"><b>${diff >= 0 ? "+" : ""}${formatCurrency(diff)}</b></td></tr>` : ""}
 </table>
 ${data.shiftSummary ? `<div class="d"></div>
 <table>
-  <tr><td>Total Revenue</td><td style="text-align:right">₹${Number(data.shiftSummary.totalRevenue).toLocaleString()}</td></tr>
+  <tr><td>Total Revenue</td><td style="text-align:right">${formatCurrency(data.shiftSummary.totalRevenue)}</td></tr>
   <tr><td>Bills</td><td style="text-align:right">${data.shiftSummary.billCount}</td></tr>
-  <tr><td>Avg Bill</td><td style="text-align:right">₹${Math.round(data.shiftSummary.avgBillValue).toLocaleString()}</td></tr>
+  <tr><td>Avg Bill</td><td style="text-align:right">${formatCurrency(Math.round(data.shiftSummary.avgBillValue))}</td></tr>
 </table>
 ${payRows ? `<div class="d"></div><table><tr><td><b>Payment</b></td><td style="text-align:right"><b>Amount</b></td><td style="text-align:right"><b>#</b></td></tr>${payRows}</table>` : ""}` : ""}
 ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
@@ -193,9 +216,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
     pw.document.close();
   };
 
-  const today = new Date().toLocaleDateString("en-IN", {
-    weekday: "long", day: "numeric", month: "long", year: "numeric",
-  });
+  const today = formatLongDate(new Date());
 
   return (
     <div className="p-4 space-y-4">
@@ -206,11 +227,15 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
             <Wallet className="h-4 w-4 text-white" />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900">Counter Cash</p>
+            <p className="text-sm font-black tracking-tight text-gray-900">Counter Cash</p>
             <p className="text-[10px] text-gray-500">{today}</p>
           </div>
         </div>
-        <button onClick={fetchSessions} className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-500">
+        <button
+          onClick={fetchSessions}
+          aria-label="Refresh sessions"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-500"
+        >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
       </div>
@@ -233,7 +258,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-xs font-bold text-emerald-700">Session Open</p>
             <span className="text-[10px] text-emerald-600">
-              {new Date(openSession.openedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              {formatTime(openSession.openedAt)}
             </span>
             <button
               onClick={() => printShiftSummary({
@@ -245,15 +270,16 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                 shiftSummary,
               })}
               title="Print X-Report (mid-shift summary)"
-              className="ml-auto flex h-6 w-6 items-center justify-center rounded-lg bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
+              aria-label="Print X-Report"
+              className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
             >
-              <Printer className="h-3 w-3" />
+              <Printer className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
             <div className="rounded-lg bg-white border border-emerald-100 px-3 py-2">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide">Opening Cash</p>
-              <p className="text-sm font-black text-gray-900">₹{Number(openSession.openingCash).toLocaleString()}</p>
+              <p className="text-sm font-black text-gray-900">{formatCurrency(openSession.openingCash)}</p>
             </div>
             <div className="rounded-lg bg-white border border-emerald-100 px-3 py-2">
               <p className="text-[10px] text-gray-500 uppercase tracking-wide">Opened By</p>
@@ -272,7 +298,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                 <div>
                   <p className="text-[9px] text-gray-500 uppercase tracking-wide">Revenue</p>
                   <p className="text-sm font-black text-gray-900">
-                    ₹{Number(shiftSummary.totalRevenue).toLocaleString()}
+                    {formatCurrency(shiftSummary.totalRevenue)}
                   </p>
                 </div>
                 <div>
@@ -282,7 +308,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                 <div>
                   <p className="text-[9px] text-gray-500 uppercase tracking-wide">Avg Bill</p>
                   <p className="text-sm font-black text-gray-900">
-                    ₹{Math.round(shiftSummary.avgBillValue).toLocaleString()}
+                    {formatCurrency(shiftSummary.avgBillValue)}
                   </p>
                 </div>
               </div>
@@ -293,7 +319,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                       key={p.method}
                       className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-bold text-gray-600"
                     >
-                      {p.method}: ₹{Number(p.amount).toLocaleString()} ({p.count})
+                      {p.method}: {formatCurrency(p.amount)} ({p.count})
                     </span>
                   ))}
                 </div>
@@ -304,6 +330,11 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
           {/* Close session form */}
           <div className="space-y-2 pt-1 border-t border-emerald-200">
             <p className="text-[11px] font-bold text-gray-700">Close Session</p>
+            {openSession?.queuedOffline && (
+              <p className="text-[10px] font-semibold text-amber-600">
+                This session hasn't synced yet — it can be closed once it does.
+              </p>
+            )}
             <input
               type="number"
               placeholder="Actual cash in drawer (₹)"
@@ -325,13 +356,13 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                   : "bg-red-50 border border-red-200 text-red-700"
               }`}>
                 <AlertTriangle className="h-3 w-3 shrink-0" />
-                Expected ₹{liveExpectedCash.toLocaleString()} · Difference: ₹{(Number(actualCash) - liveExpectedCash).toLocaleString()}
+                Expected {formatCurrency(liveExpectedCash)} · Difference: {formatCurrency(Number(actualCash) - liveExpectedCash)}
               </div>
             )}
             <button
-              onClick={handleClose}
-              disabled={!actualCash || closeLoading}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+              onClick={() => setConfirmingClose(true)}
+              disabled={!actualCash || closeLoading || !openSession?.id}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40"
             >
               <Lock className="h-3 w-3" />
               {closeLoading ? "Closing..." : "Close Session"}
@@ -386,7 +417,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                       {new Date(s.businessDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                     </p>
                     <p className="text-[10px] text-gray-400">
-                      Open ₹{Number(s.openingCash).toLocaleString()} → Close ₹{Number(s.closingCash).toLocaleString()}
+                      Open {formatCurrency(s.openingCash)} → Close {formatCurrency(s.closingCash)}
                     </p>
                   </div>
                   <div className="text-right">
@@ -397,7 +428,7 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
                     </span>
                     {s.status === "CLOSED" && (
                       <p className={`text-[10px] font-bold ${diff >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                        {diff >= 0 ? "+" : ""}₹{diff.toLocaleString()}
+                        {diff >= 0 ? "+" : ""}{formatCurrency(diff)}
                       </p>
                     )}
                   </div>
@@ -407,6 +438,28 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
           </div>
         </div>
       )}
+
+      {/* CLOSE SESSION CONFIRM MODAL */}
+      <ConfirmDialog
+        open={confirmingClose}
+        title="Close this cash session?"
+        description="This locks the drawer for today and prints the Z-report. It cannot be reopened."
+        confirmLabel={closeLoading ? "Closing…" : "Close Session"}
+        onConfirm={handleClose}
+        onCancel={() => setConfirmingClose(false)}
+        confirmDisabled={closeLoading}
+      >
+        <div className="mt-3 space-y-1 rounded-lg bg-gray-50 p-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Expected</span>
+            <span className="font-bold text-gray-800">{formatCurrency(liveExpectedCash)}</span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-gray-500">Actual (entered)</span>
+            <span className="font-bold text-gray-800">{formatCurrency(Number(actualCash) || 0)}</span>
+          </div>
+        </div>
+      </ConfirmDialog>
     </div>
   );
 }

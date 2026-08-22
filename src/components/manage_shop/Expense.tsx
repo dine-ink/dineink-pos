@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Plus, Search, Save, Trash2 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -11,6 +11,13 @@ import {
   getExpenseUsers,
   updateExpense,
 } from "@/services/expenseService";
+import { formatCurrency, formatLongDate, formatShortDate } from "@/utils/format";
+import { useSearchFilter } from "@/hooks/useSearchFilter";
+import { PAYMENT_SOURCE, PAYMENT_SOURCES } from "@/constants/payment";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
 
 type ExpenseType = {
   id: number;
@@ -33,6 +40,9 @@ type ExpenseType = {
 
   isNew?: boolean;
 
+  /** Set locally when this expense was created offline and hasn't synced yet. */
+  queuedOffline?: boolean;
+
   paidByUser?: {
     id: number;
     name: string;
@@ -44,11 +54,7 @@ type UserType = {
   name: string;
 };
 
-const todayDate = new Date().toLocaleDateString("en-GB", {
-  day: "2-digit",
-  month: "long",
-  year: "numeric",
-});
+const todayDate = formatLongDate(new Date());
 
 export default function Expense() {
   const [expenses, setExpenses] = useState<ExpenseType[]>([]);
@@ -61,17 +67,17 @@ export default function Expense() {
 
   const [editRowId, setEditRowId] = useState<number | null>(null);
 
+  const [deleteTarget, setDeleteTarget] = useState<ExpenseType | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const { user } = useAppSelector((state) => state.auth);
 
-  const filteredExpenses = useMemo(() => {
-    return expenses.filter(
-      (expense) =>
-        expense.title?.toLowerCase().includes(search.toLowerCase()) ||
-        expense.description?.toLowerCase().includes(search.toLowerCase()) ||
-        expense.expenseType?.toLowerCase().includes(search.toLowerCase()) ||
-        expense.paidByUser?.name?.toLowerCase().includes(search.toLowerCase()),
-    );
-  }, [expenses, search]);
+  const filteredExpenses = useSearchFilter(expenses, search, (expense) => [
+    expense.title,
+    expense.description,
+    expense.expenseType,
+    expense.paidByUser?.name,
+  ]);
 
   const fetchData = async () => {
     try {
@@ -123,7 +129,7 @@ export default function Expense() {
 
       expenseType: "",
 
-      paymentSource: "SHOP_CASH",
+      paymentSource: PAYMENT_SOURCES[0].value,
 
       paidByUserId: null,
 
@@ -139,8 +145,9 @@ export default function Expense() {
 
   const handleSave = async (expense: ExpenseType) => {
     try {
+      let response: any;
       if (expense.isNew) {
-        await createExpense({
+        response = await createExpense({
           restaurantId: user?.restaurantId,
 
           branchId: user?.branchId,
@@ -156,7 +163,7 @@ export default function Expense() {
           paymentSource: expense.paymentSource,
 
           paidByUserId:
-            expense.paymentSource === "EMPLOYEE_PAID"
+            expense.paymentSource === PAYMENT_SOURCE.EMPLOYEE_PAID
               ? expense.paidByUserId
               : null,
 
@@ -165,7 +172,7 @@ export default function Expense() {
           createdById: user.id,
         });
       } else {
-        await updateExpense(expense.id, {
+        response = await updateExpense(expense.id, {
           title: expense.title,
 
           description: expense.description || "",
@@ -177,7 +184,7 @@ export default function Expense() {
           paymentSource: expense.paymentSource,
 
           paidByUserId:
-            expense.paymentSource === "EMPLOYEE_PAID"
+            expense.paymentSource === PAYMENT_SOURCE.EMPLOYEE_PAID
               ? expense.paidByUserId
               : null,
 
@@ -187,49 +194,47 @@ export default function Expense() {
 
       setEditRowId(null);
 
-      await fetchData();
+      if (response?.queuedOffline) {
+        // No connection — keep showing what was just entered instead of
+        // refetching (the server doesn't have this yet, so a refetch would
+        // make it vanish). Locked from being edited again until it syncs, so
+        // a second save can't queue a duplicate create for the same expense.
+        toast("No connection — expense saved offline, will sync automatically.", { icon: "📴", duration: 5000 });
+        setExpenses((prev) =>
+          prev.map((e) => (e.id === expense.id ? { ...expense, queuedOffline: true } : e)),
+        );
+      } else {
+        await fetchData();
+      }
     } catch (error) {
       console.log(error);
       toast.error("Couldn't save this expense — please try again.");
     }
   };
 
-  const handleDelete = async (expenseId: number) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const confirmDelete = window.confirm("Delete this expense?");
-
-      if (!confirmDelete) {
-        return;
-      }
-
-      await deleteExpense(expenseId);
-
+      setDeleting(true);
+      await deleteExpense(deleteTarget.id);
+      setDeleteTarget(null);
       await fetchData();
     } catch (error) {
       console.log(error);
       toast.error("Couldn't delete this expense — please try again.");
+    } finally {
+      setDeleting(false);
     }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-GB", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const formatAmount = (amount: number) => {
-    return `₹ ${Number(amount || 0).toLocaleString("en-IN")}`;
-  };
   return (
-    <div className="w-full h-screen bg-gray-50 p-2">
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm h-[95vh] flex flex-col overflow-hidden">
+    <div className="w-full h-dvh bg-gray-50 p-2">
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm h-[95dvh] flex flex-col overflow-hidden">
         {/* HEADER */}
         <div className="p-5 border-b border-gray-100 shrink-0">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">
+              <h1 className="text-2xl font-bold text-gray-900">
                 Expense Details - {todayDate}
               </h1>
 
@@ -250,13 +255,13 @@ export default function Expense() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search expense..."
-                  className="w-full h-10 rounded-xl border border-gray-200 pl-12 pr-4 outline-none focus:border-red-500"
+                  className="w-full h-11 rounded-xl border border-gray-200 pl-12 pr-4 outline-none focus:border-red-500"
                 />
               </div>
 
               <button
                 onClick={handleAddExpense}
-                className="h-10 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-2 transition-all"
+                className="h-11 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-2 transition-all"
               >
                 <Plus size={18} />
                 Add Expense
@@ -265,220 +270,377 @@ export default function Expense() {
           </div>
         </div>
 
-        <div className="flex-1 p-5 pt-0 min-h-0">
-          <div className="w-full h-full overflow-y-scroll overflow-x-scroll rounded-xl border border-gray-100">
-            <table className="min-w-[1200px] w-full border-collapse text-sm">
-              <thead className="sticky top-0 bg-white z-10 shadow-sm">
-                <tr className="bg-gray-50 text-left">
-                  <th className="p-4 text-sm font-bold">Date</th>
+        <div className="flex-1 p-5 pt-0 min-h-0 overflow-y-auto">
+          {loading && (
+            <div className="p-10">
+              <LoadingIndicator variant="section" label="Loading expenses..." />
+            </div>
+          )}
 
-                  <th className="p-4 text-sm font-bold">Title</th>
+          {!loading && filteredExpenses.length === 0 && (
+            <EmptyState
+              icon={<Search className="h-8 w-8 text-gray-300" />}
+              title={search ? "No expenses match your search" : "No expenses found"}
+              className="py-10"
+            />
+          )}
 
-                  <th className="p-4 text-sm font-bold">Description</th>
-
-                  <th className="p-4 text-sm font-bold">Expense Type</th>
-
-                  <th className="p-4 text-sm font-bold">Payment Source</th>
-
-                  <th className="p-4 text-sm font-bold">Paid By</th>
-
-                  <th className="p-4 text-sm font-bold">Amount</th>
-
-                  <th className="p-4 text-sm font-bold">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
+          {!loading && filteredExpenses.length > 0 && (
+            <>
+              {/* MOBILE / TABLET CARDS */}
+              <div className="space-y-2 xl:hidden">
                 {filteredExpenses.map((expense) => {
                   const isEditing = editRowId === expense.id;
-
                   return (
-                    <tr
+                    <div
                       key={expense.id}
-                      className="border-b border-gray-100 hover:bg-gray-50 transition-all"
+                      className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm"
                     >
-                      <td className="p-4 text-sm whitespace-nowrap">
-                        {formatDate(expense.expenseDate)}
-                      </td>
-
-                      <td className="p-4">
-                        {isEditing ? (
-                          <input
-                            value={expense.title}
-                            onChange={(e) =>
-                              handleChange(expense.id, "title", e.target.value)
-                            }
-                            className="border rounded-lg px-2 py-1 w-full outline-none"
-                          />
-                        ) : (
-                          expense.title
-                        )}
-                      </td>
-
-                      <td className="p-4">
-                        {isEditing ? (
-                          <input
-                            value={expense.description || ""}
-                            onChange={(e) =>
-                              handleChange(
-                                expense.id,
-                                "description",
-                                e.target.value,
-                              )
-                            }
-                            className="border rounded-lg px-2 py-1 w-full outline-none"
-                          />
-                        ) : (
-                          expense.description || "-"
-                        )}
-                      </td>
-
-                      <td className="p-4">
-                        {isEditing ? (
-                          <input
-                            value={expense.expenseType || ""}
-                            onChange={(e) =>
-                              handleChange(
-                                expense.id,
-                                "expenseType",
-                                e.target.value,
-                              )
-                            }
-                            className="border rounded-lg px-2 py-1 w-full outline-none"
-                          />
-                        ) : (
-                          expense.expenseType || "-"
-                        )}
-                      </td>
-
-                      <td className="p-4">
-                        {isEditing ? (
-                          <select
-                            value={expense.paymentSource}
-                            onChange={(e) =>
-                              handleChange(
-                                expense.id,
-                                "paymentSource",
-                                e.target.value,
-                              )
-                            }
-                            className="border rounded-lg px-2 py-1 w-full outline-none"
-                          >
-                            <option value="SHOP_CASH">Shop Cash</option>
-
-                            <option value="EMPLOYEE_PAID">Employee Paid</option>
-                          </select>
-                        ) : (
-                          <span
-                            className={`px-2 py-1 rounded-lg text-xs font-medium ${
-                              expense.paymentSource === "SHOP_CASH"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-blue-100 text-blue-700"
-                            }`}
-                          >
-                            {expense.paymentSource === "SHOP_CASH"
-                              ? "Shop Cash"
-                              : "Employee Paid"}
-                          </span>
-                        )}
-                      </td>
-
-                      <td className="p-4">
-                        {isEditing ? (
-                          expense.paymentSource === "EMPLOYEE_PAID" ? (
-                            <select
-                              value={expense.paidByUserId || ""}
-                              onChange={(e) =>
-                                handleChange(
-                                  expense.id,
-                                  "paidByUserId",
-                                  Number(e.target.value),
-                                )
-                              }
-                              className="border rounded-lg px-2 py-1 w-full outline-none"
-                            >
-                              <option value="">Select Employee</option>
-
-                              {users.map((user) => (
-                                <option key={user.id} value={user.id}>
-                                  {user.name}
-                                </option>
-                              ))}
-                            </select>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          {isEditing ? (
+                            <input
+                              value={expense.title}
+                              onChange={(e) => handleChange(expense.id, "title", e.target.value)}
+                              placeholder="Title"
+                              className="w-full border rounded-lg px-2 py-1.5 text-sm font-bold outline-none focus:border-red-400"
+                            />
                           ) : (
-                            <span>Shop</span>
-                          )
-                        ) : expense.paymentSource === "SHOP_CASH" ? (
-                          "Shop"
-                        ) : (
-                          expense.paidByUser?.name || "-"
-                        )}
-                      </td>
-
-                      <td className="p-4 text-red-600 font-medium">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            value={expense.amount}
-                            onChange={(e) =>
-                              handleChange(
-                                expense.id,
-                                "amount",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="border rounded-lg px-2 py-1 w-full outline-none"
-                          />
-                        ) : (
-                          formatAmount(expense.amount)
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
+                            <h3 className="truncate text-sm font-bold text-gray-900">{expense.title}</h3>
+                          )}
+                          <p className="mt-0.5 text-[11px] text-gray-400">{formatShortDate(expense.expenseDate)}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2.5">
                           {isEditing ? (
                             <button
                               onClick={() => handleSave(expense)}
-                              className="h-9 px-3 rounded-xl bg-green-500 text-white flex items-center justify-center"
+                              aria-label="Save expense"
+                              className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white"
                             >
                               <Save size={16} />
                             </button>
                           ) : (
                             <button
                               onClick={() => setEditRowId(expense.id)}
-                              className="h-9 px-3 rounded-xl border border-red-500 text-red-700 hover:bg-red-500 hover:text-white transition-all"
+                              disabled={expense.queuedOffline}
+                              aria-label="Edit expense"
+                              title={expense.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
+                              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Pencil size={16} />
                             </button>
                           )}
-
                           <button
-                            onClick={() => handleDelete(expense.id)}
-                            className="h-9 px-3 rounded-xl border border-red-500 text-red-700 hover:bg-red-500 hover:text-white transition-all"
+                            onClick={() => setDeleteTarget(expense)}
+                            disabled={expense.queuedOffline}
+                            aria-label="Delete expense"
+                            title={expense.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
+                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-500 text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Trash2 size={16} />
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                      </div>
+
+                      {isEditing ? (
+                        <div className="mt-2.5 space-y-2 border-t border-gray-100 pt-2.5">
+                          <input
+                            value={expense.description || ""}
+                            onChange={(e) => handleChange(expense.id, "description", e.target.value)}
+                            placeholder="Description"
+                            className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                          />
+                          <div className="grid grid-cols-2 gap-2">
+                            <input
+                              value={expense.expenseType || ""}
+                              onChange={(e) => handleChange(expense.id, "expenseType", e.target.value)}
+                              placeholder="Type"
+                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                            />
+                            <input
+                              type="number"
+                              value={expense.amount}
+                              onChange={(e) => handleChange(expense.id, "amount", Number(e.target.value))}
+                              placeholder="Amount"
+                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                            />
+                          </div>
+                          <select
+                            value={expense.paymentSource}
+                            onChange={(e) => handleChange(expense.id, "paymentSource", e.target.value)}
+                            className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                          >
+                            {PAYMENT_SOURCES.map((source) => (
+                              <option key={source.value} value={source.value}>{source.label}</option>
+                            ))}
+                          </select>
+                          {expense.paymentSource === PAYMENT_SOURCE.EMPLOYEE_PAID && (
+                            <select
+                              value={expense.paidByUserId || ""}
+                              onChange={(e) => handleChange(expense.id, "paidByUserId", Number(e.target.value))}
+                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                            >
+                              <option value="">Select Employee</option>
+                              {users.map((u) => (
+                                <option key={u.id} value={u.id}>{u.name}</option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <StatusBadge
+                              tone={
+                                expense.paymentSource === PAYMENT_SOURCE.SHOP_CASH
+                                  ? "bg-green-100 text-green-700"
+                                  : "bg-blue-100 text-blue-700"
+                              }
+                              size="md"
+                            >
+                              {PAYMENT_SOURCES.find((s) => s.value === expense.paymentSource)?.label}
+                            </StatusBadge>
+                            {expense.expenseType && (
+                              <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500">
+                                {expense.expenseType}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm font-black text-red-600">{formatCurrency(expense.amount)}</p>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
-
-            {loading && (
-              <div className="p-10 text-center text-gray-500">
-                Loading expenses...
               </div>
-            )}
 
-            {!loading && filteredExpenses.length === 0 && (
-              <div className="p-10 text-center text-gray-500">
-                No expenses found
+              {/* DESKTOP TABLE */}
+              <div className="hidden xl:block w-full h-full overflow-y-scroll overflow-x-scroll rounded-xl border border-gray-100">
+                <table className="min-w-[1200px] w-full border-collapse text-sm">
+                  <thead className="sticky top-0 bg-white z-10 shadow-sm">
+                    <tr className="bg-gray-50 text-left">
+                      <th className="p-4 text-sm font-bold">Date</th>
+
+                      <th className="p-4 text-sm font-bold">Title</th>
+
+                      <th className="p-4 text-sm font-bold">Description</th>
+
+                      <th className="p-4 text-sm font-bold">Expense Type</th>
+
+                      <th className="p-4 text-sm font-bold">Payment Source</th>
+
+                      <th className="p-4 text-sm font-bold">Paid By</th>
+
+                      <th className="p-4 text-sm font-bold">Amount</th>
+
+                      <th className="p-4 text-sm font-bold">Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {filteredExpenses.map((expense) => {
+                      const isEditing = editRowId === expense.id;
+
+                      return (
+                        <tr
+                          key={expense.id}
+                          className="border-b border-gray-100 hover:bg-gray-50 transition-all"
+                        >
+                          <td className="p-4 text-sm whitespace-nowrap">
+                            {formatShortDate(expense.expenseDate)}
+                          </td>
+
+                          <td className="p-4">
+                            {isEditing ? (
+                              <input
+                                value={expense.title}
+                                onChange={(e) =>
+                                  handleChange(expense.id, "title", e.target.value)
+                                }
+                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                              />
+                            ) : (
+                              expense.title
+                            )}
+                          </td>
+
+                          <td className="p-4">
+                            {isEditing ? (
+                              <input
+                                value={expense.description || ""}
+                                onChange={(e) =>
+                                  handleChange(
+                                    expense.id,
+                                    "description",
+                                    e.target.value,
+                                  )
+                                }
+                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                              />
+                            ) : (
+                              expense.description || "-"
+                            )}
+                          </td>
+
+                          <td className="p-4">
+                            {isEditing ? (
+                              <input
+                                value={expense.expenseType || ""}
+                                onChange={(e) =>
+                                  handleChange(
+                                    expense.id,
+                                    "expenseType",
+                                    e.target.value,
+                                  )
+                                }
+                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                              />
+                            ) : (
+                              expense.expenseType || "-"
+                            )}
+                          </td>
+
+                          <td className="p-4">
+                            {isEditing ? (
+                              <select
+                                value={expense.paymentSource}
+                                onChange={(e) =>
+                                  handleChange(
+                                    expense.id,
+                                    "paymentSource",
+                                    e.target.value,
+                                  )
+                                }
+                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                              >
+                                {PAYMENT_SOURCES.map((source) => (
+                                  <option key={source.value} value={source.value}>
+                                    {source.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <StatusBadge
+                                tone={
+                                  expense.paymentSource === PAYMENT_SOURCE.SHOP_CASH
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-blue-100 text-blue-700"
+                                }
+                                size="md"
+                              >
+                                {PAYMENT_SOURCES.find((s) => s.value === expense.paymentSource)?.label}
+                              </StatusBadge>
+                            )}
+                          </td>
+
+                          <td className="p-4">
+                            {isEditing ? (
+                              expense.paymentSource === PAYMENT_SOURCE.EMPLOYEE_PAID ? (
+                                <select
+                                  value={expense.paidByUserId || ""}
+                                  onChange={(e) =>
+                                    handleChange(
+                                      expense.id,
+                                      "paidByUserId",
+                                      Number(e.target.value),
+                                    )
+                                  }
+                                  className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                >
+                                  <option value="">Select Employee</option>
+
+                                  {users.map((user) => (
+                                    <option key={user.id} value={user.id}>
+                                      {user.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              ) : (
+                                <span>Shop</span>
+                              )
+                            ) : expense.paymentSource === PAYMENT_SOURCE.SHOP_CASH ? (
+                              "Shop"
+                            ) : (
+                              expense.paidByUser?.name || "-"
+                            )}
+                          </td>
+
+                          <td className="p-4 text-red-600 font-medium">
+                            {isEditing ? (
+                              <input
+                                type="number"
+                                value={expense.amount}
+                                onChange={(e) =>
+                                  handleChange(
+                                    expense.id,
+                                    "amount",
+                                    Number(e.target.value),
+                                  )
+                                }
+                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                              />
+                            ) : (
+                              formatCurrency(expense.amount)
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center gap-3">
+                              {isEditing ? (
+                                <button
+                                  onClick={() => handleSave(expense)}
+                                  aria-label="Save expense"
+                                  className="h-9 px-3 rounded-xl bg-green-500 text-white flex items-center justify-center"
+                                >
+                                  <Save size={16} />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setEditRowId(expense.id)}
+                                  disabled={expense.queuedOffline}
+                                  aria-label="Edit expense"
+                                  title={expense.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
+                                  className="h-9 px-3 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                              )}
+
+                              <button
+                                onClick={() => setDeleteTarget(expense)}
+                                disabled={expense.queuedOffline}
+                                aria-label="Delete expense"
+                                title={expense.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
+                                className="h-9 px-3 rounded-xl border border-red-500 text-red-700 hover:bg-red-500 hover:text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* DELETE CONFIRM MODAL */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete expense?"
+        description={
+          deleteTarget && (
+            <>"{deleteTarget.title}" — {formatCurrency(deleteTarget.amount)}. This cannot be undone.</>
+          )
+        }
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        confirmDisabled={deleting}
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { enqueueAction, isNetworkError } from "@/utils/offlineQueue";
 
 export const getInventoryAdjustments = async (branchId: number) => {
   const response = await api.get(`/admin/inventory/${branchId}`);
@@ -14,12 +15,9 @@ export const getInventoryIngredients = async (restaurantId: number) => {
   return response.data;
 };
 
-export const getInventoryUsers = async (branchId: number) => {
-  const response = await api.get(`/admin/inventory/users/${branchId}`);
-
-  return response.data;
-};
-
+// Recording a stock adjustment must never be lost to a network blip. Queues
+// locally on a genuine connectivity failure and syncs automatically once
+// reconnected (see MainLayout's flush loop).
 export const createInventoryAdjustment = async (data: {
   restaurantId: number;
   branchId: number;
@@ -34,9 +32,16 @@ export const createInventoryAdjustment = async (data: {
 
   updatedById?: number;
 }) => {
-  const response = await api.post("/admin/inventory", data);
-
-  return response.data;
+  try {
+    const response = await api.post("/admin/inventory", data);
+    return response.data;
+  } catch (err: any) {
+    if (isNetworkError(err)) {
+      enqueueAction("/admin/inventory", data, "Inventory adjustment", "generic");
+      return { success: true, queuedOffline: true };
+    }
+    throw err;
+  }
 };
 
 export const updateInventoryAdjustment = async (

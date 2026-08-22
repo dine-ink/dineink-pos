@@ -1,5 +1,8 @@
+import { memo } from "react";
 import { useAppSelector } from "@/store/hooks";
 import { Minus, Plus, ShoppingBag, ArrowLeft, PauseCircle } from "lucide-react";
+import { formatCurrency } from "@/utils/format";
+import { canManageBilling } from "@/constants/roles";
 
 type Props = {
   cartItems: any[];
@@ -15,7 +18,7 @@ type Props = {
   addOns?: Record<number, { name: string; price: number }[]>;
 };
 
-export default function CartSection({
+function CartSection({
   cartItems,
   activeCart,
   grandTotal,
@@ -33,6 +36,7 @@ export default function CartSection({
     return (item.price + addOnUnitTotal) * activeCart[item.id];
   };
   const { user } = useAppSelector((state) => state.auth);
+  const canCheckout = canManageBilling(user?.role);
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
       {/* HEADER */}
@@ -54,7 +58,7 @@ export default function CartSection({
           </div>
           {cartItems.length > 0 && (
             <span className="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-black text-red-700">
-              ₹{grandTotal.toFixed(2)}
+              {formatCurrency(grandTotal)}
             </span>
           )}
         </div>
@@ -103,7 +107,7 @@ export default function CartSection({
                         {item.name}
                       </p>
                       <p className="text-[10px] text-gray-500">
-                        ₹{item.price} each
+                        {formatCurrency(item.price)} each
                       </p>
                     </div>
 
@@ -129,7 +133,7 @@ export default function CartSection({
                     {/* TOTAL */}
                     <div className="shrink-0 text-right min-w-[48px]">
                       <p className="text-sm font-black text-red-600">
-                        ₹{lineTotal(item)}
+                        {formatCurrency(lineTotal(item))}
                       </p>
                     </div>
                   </div>
@@ -172,12 +176,12 @@ export default function CartSection({
                 <div className="mt-3 border-t border-gray-200 pt-3">
                   <p className="text-[10px] text-gray-500">Grand Total</p>
                   <h2 className="mt-0.5 text-3xl font-black text-red-600">
-                    ₹{grandTotal.toFixed(2)}
+                    {formatCurrency(grandTotal)}
                   </h2>
                 </div>
               </div>
             </div>
-            {(user?.role === "MANAGER" || user?.role === "CASHIER") && (
+            {canCheckout && (
               <div className="shrink-0 p-3 pt-0 space-y-2">
                 {onHold && (
                   <button
@@ -207,11 +211,11 @@ export default function CartSection({
             <div>
               <p className="text-[10px] text-gray-500">Grand Total</p>
               <h2 className="text-xl font-black text-red-600">
-                ₹{grandTotal.toFixed(2)}
+                {formatCurrency(grandTotal)}
               </h2>
             </div>
             <div className="flex flex-1 items-center gap-1.5">
-              {onHold && (user?.role === "MANAGER" || user?.role === "CASHIER") && (
+              {onHold && canCheckout && (
                 <button
                   onClick={onHold}
                   className="flex items-center gap-1 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-xs font-black text-amber-700"
@@ -220,7 +224,7 @@ export default function CartSection({
                   Hold
                 </button>
               )}
-              {(user?.role === "MANAGER" || user?.role === "CASHIER") && (
+              {canCheckout && (
                 <button
                   onClick={() => setStep("CUSTOMER")}
                   className="flex-1 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 py-2.5 text-xs font-black text-white shadow-lg shadow-red-100"
@@ -235,3 +239,5 @@ export default function CartSection({
     </div>
   );
 }
+
+export default memo(CartSection);

@@ -1,4 +1,5 @@
 import { api } from "./api";
+import { enqueueAction, isNetworkError } from "@/utils/offlineQueue";
 
 export const getExpenses = async (branchId: number) => {
   const response = await api.get(`/admin/expenses/${branchId}`);
@@ -12,6 +13,9 @@ export const getExpenseUsers = async (branchId: number) => {
   return response.data;
 };
 
+// Logging an expense must never be lost to a network blip. Queues locally
+// on a genuine connectivity failure and syncs automatically once reconnected
+// (see MainLayout's flush loop).
 export const createExpense = async (data: {
   restaurantId: number;
   branchId: number;
@@ -24,9 +28,16 @@ export const createExpense = async (data: {
   expenseDate: string;
   createdById?: number;
 }) => {
-  const response = await api.post("/admin/expenses", data);
-
-  return response.data;
+  try {
+    const response = await api.post("/admin/expenses", data);
+    return response.data;
+  } catch (err: any) {
+    if (isNetworkError(err)) {
+      enqueueAction("/admin/expenses", data, `Expense: ${data.title}`, "generic");
+      return { success: true, queuedOffline: true };
+    }
+    throw err;
+  }
 };
 
 export const updateExpense = async (

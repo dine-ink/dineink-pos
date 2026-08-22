@@ -11,21 +11,17 @@ import {
   updateInventoryAdjustment,
   deleteInventoryAdjustment,
 } from "@/services/inventoryAdjustmentService";
-
-type Inventory = {
-  id: number;
-  date: string;
-  product: string;
-  quantity: string;
-  reason: string;
-  by: string;
-  time: string;
-};
+import { formatShortDate } from "@/utils/format";
+import { useSearchFilter } from "@/hooks/useSearchFilter";
+import { ADJUSTMENT_TYPES } from "@/constants/inventory";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
 
 export default function Inventory() {
   const [inventory, setInventory] = useState<any[]>([]);
   const [ingredients, setIngredients] = useState<any[]>([]);
-  // const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const { user } = useAppSelector((state) => state.auth);
 
@@ -35,42 +31,40 @@ export default function Inventory() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  const handleDelete = async (inventoryId: number) => {
+  const [deleteTarget, setDeleteTarget] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const confirmDelete = window.confirm("Delete this inventory adjustment?");
-
-      if (!confirmDelete) {
-        return;
-      }
-
-      setLoading(true);
-
-      await deleteInventoryAdjustment(inventoryId);
-
+      setDeleting(true);
+      await deleteInventoryAdjustment(deleteTarget.id);
+      setDeleteTarget(null);
       await fetchData();
     } catch (error) {
       console.log(error);
       toast.error("Couldn't delete this adjustment — please try again.");
     } finally {
-      setLoading(false);
+      setDeleting(false);
     }
   };
   const handleSave = async (item: any) => {
     if (!item.ingredientId) {
-      alert("Please select ingredient");
+      toast.error("Please select ingredient");
       return;
     }
 
     if (!item.quantity) {
-      alert("Please enter quantity");
+      toast.error("Please enter quantity");
       return;
     }
 
     try {
       setLoading(true);
+      let response: any;
 
       if (item.isNew) {
-        await createInventoryAdjustment({
+        response = await createInventoryAdjustment({
           restaurantId: user?.restaurantId,
 
           branchId: user?.branchId,
@@ -86,7 +80,7 @@ export default function Inventory() {
           updatedById: user.id,
         });
       } else {
-        await updateInventoryAdjustment(item.id, {
+        response = await updateInventoryAdjustment(item.id, {
           ingredientId: Number(item.ingredientId),
 
           quantity: Number(item.quantity),
@@ -101,7 +95,18 @@ export default function Inventory() {
 
       setEditRowId(null);
 
-      await fetchData();
+      if (response?.queuedOffline) {
+        // No connection — keep showing what was just entered instead of
+        // refetching (the server doesn't have this yet, so a refetch would
+        // make it vanish). Locked from being edited again until it syncs, so
+        // a second save can't queue a duplicate create for the same row.
+        toast("No connection — adjustment saved offline, will sync automatically.", { icon: "📴", duration: 5000 });
+        setInventory((prev: any) =>
+          prev.map((row: any) => (row.id === item.id ? { ...item, queuedOffline: true } : row)),
+        );
+      } else {
+        await fetchData();
+      }
     } catch (error) {
       console.log(error);
       toast.error("Couldn't save this adjustment — please try again.");
@@ -117,28 +122,16 @@ export default function Inventory() {
     [ingredients],
   );
 
-  const filteredInventory = useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
+  }, [search]);
 
-    return inventory.filter((item: any) => {
-      const ingredientName = item.ingredient?.name?.toLowerCase() || "";
-
-      const reason = item.reason?.toLowerCase() || "";
-
-      const adjustmentType = item.adjustmentType?.toLowerCase() || "";
-
-      const updatedBy = item.updatedBy?.name?.toLowerCase() || "";
-
-      const searchValue = search.toLowerCase();
-
-      return (
-        ingredientName.includes(searchValue) ||
-        reason.includes(searchValue) ||
-        adjustmentType.includes(searchValue) ||
-        updatedBy.includes(searchValue)
-      );
-    });
-  }, [inventory, search]);
+  const filteredInventory = useSearchFilter(inventory, search, (item: any) => [
+    item.ingredient?.name,
+    item.reason,
+    item.adjustmentType,
+    item.updatedBy?.name,
+  ]);
 
   const totalPages = Math.ceil(filteredInventory.length / itemsPerPage);
 
@@ -168,7 +161,7 @@ export default function Inventory() {
 
       quantity: 0,
 
-      adjustmentType: "DAMAGE",
+      adjustmentType: ADJUSTMENT_TYPES[0],
 
       reason: "",
 
@@ -207,7 +200,7 @@ export default function Inventory() {
     fetchData();
   }, []);
   return (
-    <div className="w-full h-screen bg-[#f7f7f7] overflow-hidden">
+    <div className="w-full h-dvh bg-[#f7f7f7] overflow-hidden">
       {/* PAGE */}
       <div className="p-6 h-full">
         {/* CARD */}
@@ -217,7 +210,7 @@ export default function Inventory() {
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               {/* TITLE */}
               <div>
-                <h1 className="text-2xl font-bold text-slate-900">
+                <h1 className="text-2xl font-bold text-gray-900">
                   Update Inventory
                 </h1>
 
@@ -240,14 +233,14 @@ export default function Inventory() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search inventory..."
-                    className="w-full h-10 rounded-xl border border-gray-200 pl-12 pr-4 outline-none focus:border-red-500"
+                    className="w-full h-11 rounded-xl border border-gray-200 pl-12 pr-4 outline-none focus:border-red-500"
                   />
                 </div>
 
                 {/* BUTTON */}
                 <button
                   onClick={handleAddRow}
-                  className="h-10 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-2 transition-all"
+                  className="h-11 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-2 transition-all"
                 >
                   <Plus size={18} />
                   Add Details
@@ -278,8 +271,143 @@ export default function Inventory() {
             </div>
           )}
 
-          {/* TABLE AREA */}
-          <div className="flex-1 overflow-auto min-h-0">
+          {!loading && filteredInventory.length === 0 && (
+            <EmptyState
+              icon={<span className="text-2xl">📦</span>}
+              title={search ? "No adjustments match your search" : "No inventory adjustments yet"}
+              className="flex-1"
+            />
+          )}
+
+          {loading && inventory.length === 0 && (
+            <div className="flex-1 py-10">
+              <LoadingIndicator variant="section" label="Loading inventory…" />
+            </div>
+          )}
+
+          {filteredInventory.length > 0 && (
+            <>
+              {/* MOBILE / TABLET CARDS */}
+              <div className="flex-1 overflow-auto min-h-0 xl:hidden">
+                <div className="space-y-2 p-3">
+                  {paginatedItems.map((item: any) => {
+                    const isEditing = editRowId === item.id;
+                    return (
+                      <div key={item.id} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            {isEditing ? (
+                              <select
+                                value={item.ingredientId || ""}
+                                onChange={(e) => handleChange(item.id, "ingredientId", Number(e.target.value))}
+                                className="w-full border rounded-lg px-2 py-1.5 text-sm font-bold outline-none focus:border-red-400"
+                              >
+                                <option value="">Select Ingredient</option>
+                                {ingredients.map((ingredient: any) => (
+                                  <option key={ingredient.id} value={ingredient.id}>{ingredient.name}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <h3 className="truncate text-sm font-bold text-gray-900">{item.ingredient?.name}</h3>
+                            )}
+                            <p className="mt-0.5 text-[11px] text-gray-400">{formatShortDate(item.createdAt)}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2.5">
+                            {isEditing ? (
+                              <>
+                                <button
+                                  onClick={() => handleSave(item)}
+                                  disabled={loading}
+                                  className="h-10 rounded-xl bg-green-500 px-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  Save
+                                </button>
+                                {item.isNew && (
+                                  <button
+                                    onClick={() => {
+                                      setInventory((prev: any) => prev.filter((row: any) => row.id !== item.id));
+                                      setEditRowId(null);
+                                    }}
+                                    aria-label="Discard new row"
+                                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-500"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => setEditRowId(item.id)}
+                                  disabled={item.queuedOffline}
+                                  aria-label="Edit adjustment"
+                                  title={item.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
+                                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget(item)}
+                                  disabled={loading || item.queuedOffline}
+                                  aria-label="Delete adjustment"
+                                  title={item.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
+                                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-500 text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+
+                        {isEditing ? (
+                          <div className="mt-2.5 space-y-2 border-t border-gray-100 pt-2.5">
+                            <div className="grid grid-cols-2 gap-2">
+                              <input
+                                type="number"
+                                value={item.quantity || 0}
+                                onChange={(e) => handleChange(item.id, "quantity", Number(e.target.value))}
+                                placeholder="Quantity"
+                                className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                              />
+                              <select
+                                value={item.adjustmentType}
+                                onChange={(e) => handleChange(item.id, "adjustmentType", e.target.value)}
+                                className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                              >
+                                {ADJUSTMENT_TYPES.map((type) => (
+                                  <option key={type} value={type}>{type}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <input
+                              value={item.reason || ""}
+                              onChange={(e) => handleChange(item.id, "reason", e.target.value)}
+                              placeholder="Reason"
+                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                            />
+                          </div>
+                        ) : (
+                          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <StatusBadge tone="bg-gray-100 text-gray-600" size="md">
+                                {item.adjustmentType}
+                              </StatusBadge>
+                              {item.reason && (
+                                <span className="text-[11px] text-gray-500">{item.reason}</span>
+                              )}
+                            </div>
+                            <p className="text-sm font-black text-gray-900">Qty: {item.quantity}</p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* DESKTOP TABLE */}
+              <div className="hidden xl:block flex-1 overflow-auto min-h-0">
             <table className="w-full min-w-[1200px] border-collapse">
               {/* TABLE HEAD */}
               <thead className="bg-[#FAFAFA] border-b border-gray-100 sticky top-0 z-10">
@@ -314,7 +442,7 @@ export default function Inventory() {
                     >
                       {/* DATE */}
                       <td className="px-3 py-2 text-xs whitespace-nowrap">
-                        {new Date(item.createdAt).toLocaleDateString("en-GB")}
+                        {formatShortDate(item.createdAt)}
                       </td>
 
                       {/* INGREDIENT */}
@@ -329,7 +457,7 @@ export default function Inventory() {
                                 Number(e.target.value),
                               )
                             }
-                            className="border rounded-md px-2 py-1 w-full text-xs"
+                            className="border rounded-md px-2 py-1 w-full text-xs outline-none focus:border-red-400"
                           >
                             <option value="">Select Ingredient</option>
 
@@ -357,7 +485,7 @@ export default function Inventory() {
                                 Number(e.target.value),
                               )
                             }
-                            className="border rounded-md px-2 py-1 w-full text-xs"
+                            className="border rounded-md px-2 py-1 w-full text-xs outline-none focus:border-red-400"
                           />
                         ) : (
                           item.quantity
@@ -376,15 +504,11 @@ export default function Inventory() {
                                 e.target.value,
                               )
                             }
-                            className="border rounded-md px-2 py-1 w-full text-xs"
+                            className="border rounded-md px-2 py-1 w-full text-xs outline-none focus:border-red-400"
                           >
-                            <option value="DAMAGE">DAMAGE</option>
-
-                            <option value="WASTAGE">WASTAGE</option>
-
-                            <option value="EXPIRED">EXPIRED</option>
-
-                            <option value="MANUAL">MANUAL</option>
+                            {ADJUSTMENT_TYPES.map((type) => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
                           </select>
                         ) : (
                           item.adjustmentType
@@ -399,7 +523,7 @@ export default function Inventory() {
                             onChange={(e) =>
                               handleChange(item.id, "reason", e.target.value)
                             }
-                            className="border rounded-md px-2 py-1 w-full text-xs"
+                            className="border rounded-md px-2 py-1 w-full text-xs outline-none focus:border-red-400"
                           />
                         ) : (
                           item.reason || "-"
@@ -413,7 +537,7 @@ export default function Inventory() {
 
                       {/* ACTIONS */}
                       <td className="px-3 py-2">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-3">
                           {isEditing ? (
                             <>
                               <button
@@ -445,14 +569,19 @@ export default function Inventory() {
                             <>
                               <button
                                 onClick={() => setEditRowId(item.id)}
-                                className="h-8 w-8 rounded-lg border border-red-500 text-red-600 flex items-center justify-center"
+                                disabled={item.queuedOffline}
+                                aria-label="Edit adjustment"
+                                title={item.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
+                                className="h-8 w-8 rounded-lg border border-gray-300 text-gray-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Pencil size={14} />
                               </button>
 
                               <button
-                                onClick={() => handleDelete(item.id)}
-                                disabled={loading}
+                                onClick={() => setDeleteTarget(item)}
+                                disabled={loading || item.queuedOffline}
+                                aria-label="Delete adjustment"
+                                title={item.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
                                 className="h-8 w-8 rounded-lg border border-red-500 text-red-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
                               >
                                 <Trash2 size={14} />
@@ -466,7 +595,9 @@ export default function Inventory() {
                 })}
               </tbody>
             </table>
-          </div>
+              </div>
+            </>
+          )}
 
           {/* FOOTER */}
           <div className="p-6 border-t border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
@@ -501,6 +632,21 @@ export default function Inventory() {
           </div>
         </div>
       </div>
+
+      {/* DELETE CONFIRM MODAL */}
+      <ConfirmDialog
+        open={!!deleteTarget}
+        title="Delete this inventory adjustment?"
+        description={
+          deleteTarget && (
+            <>{deleteTarget.ingredient?.name} — {deleteTarget.adjustmentType}. This cannot be undone.</>
+          )
+        }
+        confirmLabel={deleting ? "Deleting…" : "Delete"}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+        confirmDisabled={deleting}
+      />
     </div>
   );
 }

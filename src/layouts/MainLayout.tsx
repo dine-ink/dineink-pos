@@ -9,6 +9,7 @@ import { Receipt, ClipboardList, Wifi, WifiOff, Store, Bell, LogOut, User, ChefH
 import { getAllRunningOrders, updateRunningOrderStatus } from "@/services/runningOrderService";
 import { getMyProfile } from "@/services/authService";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
+import { usePolling } from "@/hooks/usePolling";
 import { flushQueue, getQueueCount } from "@/utils/offlineQueue";
 
 export default function MainLayout() {
@@ -44,25 +45,25 @@ export default function MainLayout() {
         : [{ name: "Billing", href: "/app/billing", icon: Receipt }];
 
   // Poll READY orders for notification bell — non-kitchen users only
-  useEffect(() => {
+  const fetchReadyOrders = async () => {
     if (isKitchen || !user?.restaurantId || !user?.branchId) return;
-    const fetch = async () => {
-      try {
-        const res = await getAllRunningOrders(user.restaurantId, user.branchId);
-        setReadyOrders((res.data || []).filter((o: any) => o.status === "READY"));
-      } catch { /* silent */ }
-    };
-    fetch();
-    const id = setInterval(fetch, 30000);
-    return () => clearInterval(id);
+    try {
+      const res = await getAllRunningOrders(user.restaurantId, user.branchId);
+      setReadyOrders((res.data || []).filter((o: any) => o.status === "READY"));
+    } catch { /* silent */ }
+  };
+  useEffect(() => {
+    fetchReadyOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isKitchen, user?.restaurantId, user?.branchId]);
+  usePolling(fetchReadyOrders, 30000, [isKitchen, user?.restaurantId, user?.branchId]);
 
   // Periodically refresh this staff member's own profile so a branch/role
   // reassignment made on the owner dashboard takes effect without a manual
   // logout/login — the token's claims never change mid-session otherwise.
-  useEffect(() => {
-    if (!token) return;
-    const refreshProfile = async () => {
+  usePolling(
+    async () => {
+      if (!token) return;
       try {
         const res = await getMyProfile();
         if (res.success && res.data) {
@@ -76,36 +77,48 @@ export default function MainLayout() {
           );
         }
       } catch { /* silent */ }
-    };
-    const id = setInterval(refreshProfile, 5 * 60 * 1000);
-    return () => clearInterval(id);
-  }, [token, dispatch]);
+    },
+    5 * 60 * 1000,
+    [token, dispatch],
+  );
 
   // Sync any orders queued while offline — on reconnect, and on a periodic
   // retry while online (in case a flush attempt itself failed mid-way).
+  const authExpiredNoticeShown = useRef(false);
+  const trySync = async () => {
+    const before = getQueueCount();
+    if (before === 0) return;
+    const { synced, remaining, dropped, authExpired } = await flushQueue();
+    setPendingSyncCount(remaining);
+    if (synced > 0) {
+      toast.success(`Synced ${synced} offline order${synced > 1 ? "s" : ""}`);
+    }
+    // Something the server permanently rejected (not just "still offline")
+    // — surface it rather than let it silently vanish from the queue.
+    dropped.forEach((d) => {
+      toast.error(`Couldn't sync "${d.description}": ${d.reason}`, { duration: 8000 });
+    });
+    // Expired/invalid session — the queued items are kept (never dropped for
+    // this reason), but syncing can't proceed without a fresh login. Shown
+    // once per session rather than every 15s poll; never forces navigation
+    // away from whatever the cashier is doing mid-shift.
+    if (authExpired && !authExpiredNoticeShown.current) {
+      authExpiredNoticeShown.current = true;
+      toast("Session expired — sign in again to resume syncing your pending bills.", {
+        icon: "🔒",
+        duration: 10000,
+      });
+    }
+  };
   useEffect(() => {
     if (!isOnline) {
       setPendingSyncCount(getQueueCount());
       return;
     }
-    const trySync = async () => {
-      const before = getQueueCount();
-      if (before === 0) return;
-      const { synced, remaining, dropped } = await flushQueue();
-      setPendingSyncCount(remaining);
-      if (synced > 0) {
-        toast.success(`Synced ${synced} offline order${synced > 1 ? "s" : ""}`);
-      }
-      // Something the server permanently rejected (not just "still offline")
-      // — surface it rather than let it silently vanish from the queue.
-      dropped.forEach((d) => {
-        toast.error(`Couldn't sync "${d.description}": ${d.reason}`, { duration: 8000 });
-      });
-    };
     trySync();
-    const id = setInterval(trySync, 15000);
-    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOnline]);
+  usePolling(trySync, 15000, [isOnline]);
 
   // Close notification dropdown on outside click
   useEffect(() => {
@@ -127,7 +140,12 @@ export default function MainLayout() {
 
   const handleLogout = () => {
     dispatch(logout());
-    localStorage.clear();
+    // Only clear the auth session itself — never the offline queue, held
+    // orders, offline bill-sequence counter, or saved printer config. A
+    // cashier signing out (shift change, end of day) while bills/orders are
+    // still queued unsynced must not destroy them; whoever logs in next on
+    // this device picks the queue up right where it was left.
+    localStorage.removeItem("persist:root");
     navigate("/login");
   };
 
@@ -137,7 +155,7 @@ export default function MainLayout() {
     <div className="flex h-dvh flex-col bg-gray-50">
       {/* ===== TOP NAVBAR ===== */}
       <header className="shrink-0 z-50 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 shadow-md">
-        <div className="flex h-10 items-center justify-between px-3">
+        <div className="flex h-12 items-center justify-between px-3">
           {/* BRAND */}
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20 ring-1 ring-white/30">
@@ -170,20 +188,22 @@ export default function MainLayout() {
           </nav>
 
           {/* RIGHT ACTIONS */}
-          <div className="flex items-center gap-1">
-            {/* CONNECTIVITY INDICATOR */}
+          <div className="flex items-center gap-1.5">
+            {/* CONNECTIVITY INDICATOR — visible at every size (was xl:-only,
+                so phones/tablets had zero online/syncing feedback); label
+                text only shows once there's room from sm: up. */}
             {isOnline ? (
               pendingSyncCount > 0 ? (
-                <div className="hidden xl:flex items-center gap-1 rounded-lg bg-amber-400/20 px-2 py-1">
+                <div className="flex items-center gap-1 rounded-lg bg-amber-400/20 px-2 py-1">
                   <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-                  <span className="text-[9px] font-bold tracking-widest text-white uppercase">
+                  <span className="hidden sm:inline text-[9px] font-bold tracking-widest text-white uppercase">
                     Syncing {pendingSyncCount}
                   </span>
                 </div>
               ) : (
-                <div className="hidden xl:flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1">
+                <div className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1">
                   <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                  <span className="text-[9px] font-bold tracking-widest text-white uppercase">Live</span>
+                  <span className="hidden sm:inline text-[9px] font-bold tracking-widest text-white uppercase">Live</span>
                 </div>
               )
             ) : (
@@ -199,7 +219,8 @@ export default function MainLayout() {
             <div ref={notifRef} className="relative">
               <button
                 onClick={() => setShowNotifications((v) => !v)}
-                className="relative flex h-7 w-7 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
+                aria-label="Notifications"
+                className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
               >
                 <Bell className="h-3.5 w-3.5" />
                 {readyOrders.length > 0 ? (
@@ -256,7 +277,7 @@ export default function MainLayout() {
 
             {/* PROFILE */}
             <Menu as="div" className="relative">
-              <MenuButton className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 ring-1 ring-white/20">
+              <MenuButton className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 ring-1 ring-white/20">
                 <span className="text-xs font-black">{initial}</span>
               </MenuButton>
               <MenuItems className="absolute right-0 mt-1.5 w-44 rounded-xl border border-gray-100 bg-white p-1 shadow-xl outline-none z-50">
@@ -289,7 +310,7 @@ export default function MainLayout() {
       </main>
 
       {/* ===== MOBILE BOTTOM TAB BAR ===== */}
-      <nav className="shrink-0 md:hidden border-t border-gray-200 bg-white">
+      <nav className="shrink-0 md:hidden border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
         <div className="flex">
           {navItems.map((item) => {
             const active = location.pathname === item.href;

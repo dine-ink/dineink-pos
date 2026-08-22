@@ -1,10 +1,16 @@
 import { api } from "./api";
+import { enqueueAction, isNetworkError } from "@/utils/offlineQueue";
 
 export const getCashSessions = async (branchId: number) => {
   const response = await api.get(`/cash/sessions?branchId=${branchId}`);
   return response.data;
 };
 
+// Opening the drawer is the one cash-session action worth protecting from a
+// network blip — a cashier must be able to start their shift and take cash
+// even if the connection is down at that exact moment. Queues locally on a
+// genuine connectivity failure and syncs automatically once reconnected (see
+// MainLayout's flush loop), same pattern as saveRunningOrder.
 export const openCashSession = async (data: {
   branchId: number;
   restaurantId: number;
@@ -13,8 +19,16 @@ export const openCashSession = async (data: {
   businessDate?: string;
   notes?: string;
 }) => {
-  const response = await api.post("/cash/open", data);
-  return response.data;
+  try {
+    const response = await api.post("/cash/open", data);
+    return response.data;
+  } catch (err: any) {
+    if (isNetworkError(err)) {
+      enqueueAction("/cash/open", data, "Open cash session", "generic");
+      return { success: true, queuedOffline: true };
+    }
+    throw err;
+  }
 };
 
 export const closeCashSession = async (

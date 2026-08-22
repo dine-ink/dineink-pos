@@ -102,7 +102,7 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
             <Printer className="h-4 w-4 text-red-500" />
             <h2 className="text-sm font-black text-gray-900">Printer Setup</h2>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-gray-100 transition">
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-gray-100 transition">
             <X className="h-4 w-4 text-gray-500" />
           </button>
         </div>

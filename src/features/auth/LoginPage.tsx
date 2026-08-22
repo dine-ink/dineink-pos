@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from "@/store/hooks";
 import { setAuth } from "@/store/slices/authSlice";
 import { loginApi } from "@/services/authService";
 import { Eye, EyeOff, Lock, User } from "lucide-react";
+import { LoadingIndicator } from "@/components/ui/loading-indicator";
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -38,7 +39,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-gradient-to-br from-red-600 via-red-500 to-rose-600">
+    <div className="flex min-h-dvh flex-col bg-gradient-to-br from-red-600 via-red-500 to-rose-600">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-20 -right-20 h-48 w-48 rounded-full bg-white/5 blur-3xl" />
         <div className="absolute -bottom-12 -left-12 h-40 w-40 rounded-full bg-white/5 blur-3xl" />
@@ -66,9 +67,9 @@ export default function LoginPage() {
                 <label className="mb-1 block text-xs font-bold text-gray-700">
                   Email or Phone Number
                 </label>
-                <div className="flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 transition focus-within:border-red-400 focus-within:bg-white">
+                <div className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 transition focus-within:border-red-400 focus-within:bg-white">
                   <User className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                  <input type="text" required value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+                  <input type="text" required autoComplete="username" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
                     placeholder="Enter email or phone"
                     className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
                 </div>
@@ -78,16 +79,16 @@ export default function LoginPage() {
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="text-xs font-bold text-gray-700">Password</label>
-                  <button type="button" className="text-[10px] font-semibold text-red-600 transition hover:text-red-700">
+                  <button type="button" className="-m-2 p-2 text-[10px] font-semibold text-red-600 transition hover:text-red-700">
                     Forgot password?
                   </button>
                 </div>
-                <div className="flex h-10 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 transition focus-within:border-red-400 focus-within:bg-white">
+                <div className="flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 transition focus-within:border-red-400 focus-within:bg-white">
                   <Lock className="h-3.5 w-3.5 shrink-0 text-gray-400" />
-                  <input type={showPassword ? "text" : "password"} required value={password} onChange={(e) => setPassword(e.target.value)}
+                  <input type={showPassword ? "text" : "password"} required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter your password"
                     className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="shrink-0 text-gray-400 transition hover:text-gray-600">
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="-m-2 shrink-0 p-2 text-gray-400 transition hover:text-gray-600">
                     {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </button>
                 </div>
@@ -102,9 +103,9 @@ export default function LoginPage() {
 
               {/* SUBMIT */}
               <button type="submit" disabled={loading}
-                className="flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 transition hover:shadow-xl active:scale-[0.99] disabled:opacity-70">
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-600 text-xs font-black text-white shadow-lg shadow-red-200 transition hover:shadow-xl active:scale-[0.99] disabled:opacity-70">
                 {loading ? (
-                  <><div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Signing In...</>
+                  <><LoadingIndicator variant="button" /> Signing In...</>
                 ) : "Sign In"}
               </button>
             </form>

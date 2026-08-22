@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { useAppSelector } from "@/store/hooks";
 import {
@@ -21,6 +21,7 @@ import { Settings, ArrowLeft, X, Minus, Plus, Printer } from "lucide-react";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { getQueuedItemsForTable, removeQueuedOrdersForTable, isNetworkError } from "@/utils/offlineQueue";
 import { printReceiptWithSplit, type BillData } from "@/utils/printer";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 type Props = {
   step: string;
@@ -38,6 +39,10 @@ type Props = {
   runningOrders: any[];
   addOnMap: Record<number, any[]>;
 };
+
+// Stable reference so `cartAddOns[itemId] || EMPTY_ADDONS` doesn't hand out a
+// fresh array identity every render for items with no add-ons.
+const EMPTY_ADDONS: { name: string; price: number }[] = [];
 
 export default function DineIn({
   step,
@@ -87,69 +92,122 @@ export default function DineIn({
     }
   }, [step, canCheckout]);
 
-  const filteredProducts =
-    selectedCategory === "Best Sellers"
-      ? topSellingItems
-      : products.filter(
-          (p: any) =>
-            categories.find((c: any) => c.id === p.categoryId)?.name ===
-            selectedCategory,
+  // Groups the full menu by category for the accordion — "Best Sellers" is a
+  // synthetic pseudo-category (aggregated top-sellers, not a real categoryId
+  // group), so it's special-cased the same way the old single-category
+  // filter used to.
+  const productsByCategory = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const category of categories) {
+      if (category.id === "BEST_SELLERS") {
+        map.set(category.name, topSellingItems);
+      } else {
+        map.set(
+          category.name,
+          products.filter((p: any) => p.categoryId === category.id),
         );
+      }
+    }
+    return map;
+  }, [categories, products, topSellingItems]);
+
+  // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
+  const allMenuItems = useMemo(
+    () => [
+      ...products,
+      ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id)),
+    ],
+    [products, topSellingItems],
+  );
+
+  const menuItemsById = useMemo(() => {
+    const map = new Map<number, any>();
+    for (const item of allMenuItems) map.set(item.id, item);
+    return map;
+  }, [allMenuItems]);
+
+  // Kept in sync every render so increaseQty can read the *current* cart
+  // synchronously without needing `cart` in its own dependency array —
+  // that's what keeps increaseQty/decreaseQty/bumpCart referentially
+  // stable across quantity changes, so React.memo on ProductCard actually
+  // skips re-rendering every other card when one item's qty changes.
+  const cartRef = useRef(cart);
+  useEffect(() => {
+    cartRef.current = cart;
+  });
 
   // Add-ons apply once per cart line (not per unit) — the selector only
   // opens on the FIRST unit of an item that has attached groups. Bumping
   // the quantity of an item already in the cart just increments as before.
-  const bumpCart = (id: number) =>
-    setCart((prev: any) => ({ ...prev, [id]: (prev[id] || 0) + 1 }));
+  const bumpCart = useCallback(
+    (id: number) =>
+      setCart((prev: any) => ({ ...prev, [id]: (prev[id] || 0) + 1 })),
+    [],
+  );
 
-  const increaseQty = (id: number) => {
-    const alreadyInCart = !!cart[id];
-    const groups = addOnMap[id];
-    if (!alreadyInCart && groups?.length) {
-      const product = allMenuItems.find((p: any) => p.id === id);
-      setAddOnModal(product || { id, name: "Item" });
-      return;
-    }
-    bumpCart(id);
-  };
-
-  const decreaseQty = (id: number) =>
-    setCart((prev: any) => {
-      if ((prev[id] || 0) <= 1) {
-        const u = { ...prev };
-        delete u[id];
-        setCartAddOns((p) => {
-          const next = { ...p };
-          delete next[id];
-          return next;
-        });
-        return u;
+  const increaseQty = useCallback(
+    (id: number) => {
+      const alreadyInCart = !!cartRef.current[id];
+      const groups = addOnMap[id];
+      if (!alreadyInCart && groups?.length) {
+        const product = menuItemsById.get(id);
+        setAddOnModal(product || { id, name: "Item" });
+        return;
       }
-      return { ...prev, [id]: prev[id] - 1 };
-    });
+      bumpCart(id);
+    },
+    [addOnMap, menuItemsById, bumpCart],
+  );
 
-  const confirmAddOns = (selected: { name: string; price: number }[]) => {
-    if (!addOnModal) return;
-    if (selected.length) setCartAddOns((prev) => ({ ...prev, [addOnModal.id]: selected }));
-    bumpCart(addOnModal.id);
-    setAddOnModal(null);
-  };
+  const decreaseQty = useCallback(
+    (id: number) =>
+      setCart((prev: any) => {
+        if ((prev[id] || 0) <= 1) {
+          const u = { ...prev };
+          delete u[id];
+          setCartAddOns((p) => {
+            const next = { ...p };
+            delete next[id];
+            return next;
+          });
+          return u;
+        }
+        return { ...prev, [id]: prev[id] - 1 };
+      }),
+    [],
+  );
+
+  const confirmAddOns = useCallback(
+    (selected: { name: string; price: number }[]) => {
+      setAddOnModal((current: any) => {
+        if (!current) return null;
+        if (selected.length) {
+          setCartAddOns((prev) => ({ ...prev, [current.id]: selected }));
+        }
+        bumpCart(current.id);
+        return null;
+      });
+    },
+    [bumpCart],
+  );
 
   const totalItems: number = Object.values(cart).reduce(
     (acc: any, qty: any) => acc + qty,
     0,
   ) as number;
-  // Merge products + topSellingItems (deduped) so items added from Best Sellers are found
-  const allMenuItems = [
-    ...products,
-    ...topSellingItems.filter((t) => !products.some((p) => p.id === t.id)),
-  ];
-  const cartItems = allMenuItems.filter((p) => cart[p.id]);
+  const cartItems = useMemo(
+    () => allMenuItems.filter((p) => cart[p.id]),
+    [allMenuItems, cart],
+  );
   const addOnUnitTotal = (itemId: number) =>
-    (cartAddOns[itemId] || []).reduce((s, a) => s + a.price, 0);
+    (cartAddOns[itemId] || EMPTY_ADDONS).reduce((s, a) => s + a.price, 0);
   const lineTotalFor = (item: any) =>
     (item.price + addOnUnitTotal(item.id)) * cart[item.id];
-  const grandTotal = cartItems.reduce((acc, item) => acc + lineTotalFor(item), 0);
+  const grandTotal = useMemo(
+    () => cartItems.reduce((acc, item) => acc + lineTotalFor(item), 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [cartItems, cartAddOns, cart],
+  );
 
   // Load all KOTs for this table — cart stays empty (new order starts fresh)
   const fetchExistingOrder = async (tableId: number) => {
@@ -213,13 +271,55 @@ export default function DineIn({
   };
 
   // Effective total for billing — sums non-cancelled items across all committed KOTs
-  const effectiveBillTotal = tableOrders.reduce((sum, order) => {
-    const orderItems = order.batches?.flatMap((b: any) => b.items) ?? [];
-    const active = orderItems
-      .filter((i: any) => i.status !== "CANCELLED")
-      .reduce((s: number, i: any) => s + (i.total ?? i.price * i.quantity), 0);
-    return sum + active;
-  }, 0);
+  const effectiveBillTotal = useMemo(
+    () =>
+      tableOrders.reduce((sum, order) => {
+        const orderItems = order.batches?.flatMap((b: any) => b.items) ?? [];
+        const active = orderItems
+          .filter((i: any) => i.status !== "CANCELLED")
+          .reduce((s: number, i: any) => s + (i.total ?? i.price * i.quantity), 0);
+        return sum + active;
+      }, 0),
+    [tableOrders],
+  );
+
+  // Raw table total (all committed KOTs, unfiltered) — used alongside
+  // `grandTotal` (the unsaved cart) in 3 places in the JSX below; computed
+  // once per render instead of 3 separate inline `.reduce()` calls.
+  const tableOrdersTotal = useMemo(
+    () => tableOrders.reduce((s, o) => s + (o.totalAmount || 0), 0),
+    [tableOrders],
+  );
+
+  // Placed-KOT timestamps, formatted once per order instead of recomputed
+  // inline in JSX on every render (poll ticks, unrelated cart edits, etc).
+  const tableOrdersWithTimes = useMemo(
+    () =>
+      tableOrders.map((order: any) => {
+        const ks = order.kitchenStatus ?? "PENDING";
+        return {
+          order,
+          placedAt: new Date(order.createdAt).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+          doneAt: order.completedAt
+            ? new Date(order.completedAt).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : null,
+          delivAt:
+            ks === "DELIVERED"
+              ? new Date(order.updatedAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })
+              : null,
+        };
+      }),
+    [tableOrders],
+  );
 
   // Navigate to billing — auto-save any unsaved cart items first
   const handleGoToBilling = async () => {
@@ -446,7 +546,10 @@ export default function DineIn({
       minute: "2-digit",
     });
     const pw = window.open("", "", "width=400,height=600");
-    if (!pw) return;
+    if (!pw) {
+      toast.error("Couldn't print the KOT — check that pop-ups aren't blocked.");
+      return;
+    }
     pw.document.write(`<html><head><title>KOT #${kotNo}</title>
 <style>
 @page{size:80mm auto;margin:0}
@@ -488,7 +591,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
   const printOfflineKOT = (items: any[], tableName: string) => {
     const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     const pw = window.open("", "", "width=400,height=600");
-    if (!pw) return;
+    if (!pw) {
+      toast.error("Couldn't print the offline KOT — check that pop-ups aren't blocked.");
+      return;
+    }
     pw.document.write(`<html><head><title>OFFLINE KOT</title>
 <style>
 @page{size:80mm auto;margin:0}
@@ -524,38 +630,46 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
 
   const handleCreateSubTable = async () => {
     if (!selectedParentTable || !tempTableName) return;
-    await createRestaurantTable({
-      name: tempTableName,
-      capacity: Number(tempCapacity),
-      status: "AVAILABLE",
-      isTemporary: true,
-      tempTableType: "SPLIT",
-      parentTableIds: String(selectedParentTable.id),
-      restaurantId: user.restaurantId,
-      branchId: user.branchId,
-    });
-    setTempTableName("");
-    setTempCapacity("");
-    setSelectedParentTable(null);
-    setFloorAction("HOME");
-    await fetchData();
+    try {
+      await createRestaurantTable({
+        name: tempTableName,
+        capacity: Number(tempCapacity),
+        status: "AVAILABLE",
+        isTemporary: true,
+        tempTableType: "SPLIT",
+        parentTableIds: String(selectedParentTable.id),
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+      });
+      setTempTableName("");
+      setTempCapacity("");
+      setSelectedParentTable(null);
+      setFloorAction("HOME");
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Couldn't create the split table.");
+    }
   };
 
   const handleCreateMergeTable = async () => {
     if (mergeTables.length < 2) return;
-    await createRestaurantTable({
-      name: mergeTables.map((t) => t.name).join("-"),
-      capacity: mergeTables.reduce((acc, t) => acc + (t.capacity || 0), 0),
-      status: "AVAILABLE",
-      isTemporary: true,
-      tempTableType: "MERGE",
-      parentTableIds: mergeTables.map((t) => t.id).join(","),
-      restaurantId: user.restaurantId,
-      branchId: user.branchId,
-    });
-    setMergeTables([]);
-    setFloorAction("HOME");
-    await fetchData();
+    try {
+      await createRestaurantTable({
+        name: mergeTables.map((t) => t.name).join("-"),
+        capacity: mergeTables.reduce((acc, t) => acc + (t.capacity || 0), 0),
+        status: "AVAILABLE",
+        isTemporary: true,
+        tempTableType: "MERGE",
+        parentTableIds: mergeTables.map((t) => t.id).join(","),
+        restaurantId: user.restaurantId,
+        branchId: user.branchId,
+      });
+      setMergeTables([]);
+      setFloorAction("HOME");
+      await fetchData();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || "Couldn't create the merged table.");
+    }
   };
 
   const handleTransferTable = async () => {
@@ -586,25 +700,56 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
     }
   };
 
-  const getTableColorState = (
-    tableId: number,
-  ): "available" | "in_kitchen" | "ready_to_serve" | "occupied" => {
-    const tableOrders = runningOrders.filter((o: any) => o.tableId === tableId);
-    if (tableOrders.length === 0) return "available";
-    if (
-      tableOrders.some(
-        (o: any) =>
-          !o.status ||
-          o.status === "PENDING" ||
-          o.status === "NEW" ||
-          o.status === "PREPARING",
-      )
-    )
-      return "in_kitchen";
-    if (tableOrders.some((o: any) => o.status === "READY"))
-      return "ready_to_serve";
-    return "occupied"; // all DELIVERED — customer eating, bill not closed
-  };
+  // Precomputed once per render (only recomputes when tables/runningOrders
+  // actually change) instead of re-scanning runningOrders per table on every
+  // one of the ~7 call sites below — O(tables + runningOrders) instead of
+  // O(7 × tables × runningOrders).
+  const tableColorMap = useMemo(() => {
+    const ordersByTable = new Map<number, any[]>();
+    for (const o of runningOrders as any[]) {
+      if (o.tableId == null) continue;
+      const list = ordersByTable.get(o.tableId);
+      if (list) list.push(o);
+      else ordersByTable.set(o.tableId, [o]);
+    }
+    const map = new Map<
+      number,
+      "available" | "in_kitchen" | "ready_to_serve" | "occupied"
+    >();
+    for (const table of tables as any[]) {
+      const orders = ordersByTable.get(table.id) || [];
+      if (orders.length === 0) {
+        map.set(table.id, "available");
+        continue;
+      }
+      if (
+        orders.some(
+          (o: any) =>
+            !o.status ||
+            o.status === "PENDING" ||
+            o.status === "NEW" ||
+            o.status === "PREPARING",
+        )
+      ) {
+        map.set(table.id, "in_kitchen");
+        continue;
+      }
+      if (orders.some((o: any) => o.status === "READY")) {
+        map.set(table.id, "ready_to_serve");
+        continue;
+      }
+      map.set(table.id, "occupied"); // all DELIVERED — customer eating, bill not closed
+    }
+    return map;
+  }, [tables, runningOrders]);
+
+  const getTableColorState = useCallback(
+    (
+      tableId: number,
+    ): "available" | "in_kitchen" | "ready_to_serve" | "occupied" =>
+      tableColorMap.get(tableId) ?? "available",
+    [tableColorMap],
+  );
 
   const selectedTableColorState =
     selectedTable && !selectedTable.isTemporary
@@ -616,9 +761,15 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
     const readyOrders = runningOrders.filter(
       (o: any) => o.tableId === selectedTable.id && o.status === "READY",
     );
-    await Promise.all(
+    const results = await Promise.allSettled(
       readyOrders.map((o: any) => updateRunningOrderStatus(o.id, "DELIVERED")),
     );
+    const failedCount = results.filter((r) => r.status === "rejected").length;
+    if (failedCount > 0) {
+      toast.error(
+        `Couldn't mark ${failedCount} of ${readyOrders.length} order(s) as delivered — please try again.`,
+      );
+    }
     await fetchData();
   };
 
@@ -875,9 +1026,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
         <>
           <div
             onClick={() => setShowModifyTables(false)}
-            className="fixed inset-0 z-[999] bg-black/40 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
           />
-          <div className="fixed bottom-0 right-0 z-[1000] flex flex-col overflow-hidden bg-white shadow-2xl h-[88vh] w-full rounded-t-2xl xl:top-0 xl:h-screen xl:w-[360px] xl:rounded-none xl:border-l xl:border-gray-200">
+          <div className="fixed bottom-0 right-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl h-[88vh] w-full rounded-t-2xl xl:top-0 xl:h-screen xl:w-[360px] xl:rounded-none xl:border-l xl:border-gray-200">
             {/* HEADER */}
             <div className="shrink-0 bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-white">
               <div className="flex items-center justify-between">
@@ -1014,8 +1165,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               </button>
                               <button
                                 onClick={async () => {
-                                  await deleteRestaurantTable(table.id);
-                                  await fetchData();
+                                  try {
+                                    await deleteRestaurantTable(table.id);
+                                    await fetchData();
+                                  } catch (err: any) {
+                                    toast.error(err?.response?.data?.message || "Couldn't delete this table.");
+                                  }
                                 }}
                                 className="rounded-lg border border-red-100 bg-red-50 px-2 py-1.5 text-[11px] font-black text-red-600"
                               >
@@ -1311,7 +1466,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     categories={categories}
                     selectedCategory={selectedCategory}
                     setSelectedCategory={setSelectedCategory}
-                    filteredProducts={filteredProducts}
+                    productsByCategory={productsByCategory}
                     activeCart={cart}
                     increaseQty={increaseQty}
                     decreaseQty={decreaseQty}
@@ -1330,11 +1485,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       <p className="text-sm font-black text-gray-900">
                         {totalItems > 0 && <span>{totalItems} items · </span>}
                         <span className="text-red-600">
-                          ₹
-                          {tableOrders.reduce(
-                            (s, o) => s + (o.totalAmount || 0),
-                            0,
-                          ) + grandTotal}
+                          ₹{tableOrdersTotal + grandTotal}
                         </span>
                       </p>
                     </div>
@@ -1446,16 +1597,14 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                   >
                                     <Printer className="h-3 w-3" />
                                   </button>
-                                  <span
-                                    className={`rounded-full px-1.5 py-0.5 text-[8px] font-black ${badgeCls}`}
-                                  >
+                                  <StatusBadge tone={badgeCls} size="sm">
                                     {badgeTxt}
-                                  </span>
+                                  </StatusBadge>
                                 </div>
                               </div>
-                              {items.map((item: any, i: number) => (
+                              {items.map((item: any) => (
                                 <p
-                                  key={i}
+                                  key={item.id}
                                   className="text-[10px] text-gray-500"
                                 >
                                   {item.itemName} × {item.quantity}
@@ -1513,11 +1662,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <div>
                       <p className="text-[10px] text-gray-500">Table Total</p>
                       <p className="text-lg font-black text-red-600">
-                        ₹
-                        {tableOrders.reduce(
-                          (s, o) => s + (o.totalAmount || 0),
-                          0,
-                        ) + grandTotal}
+                        ₹{tableOrdersTotal + grandTotal}
                       </p>
                     </div>
                     <div className="flex gap-1.5">
@@ -1594,7 +1739,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
                       Placed Orders
                     </p>
-                    {tableOrders.map((order: any) => {
+                    {tableOrdersWithTimes.map(({ order, placedAt, doneAt, delivAt }) => {
                       const ks = order.kitchenStatus ?? "PENDING";
                       const badgeCls =
                         ks === "DELIVERED"
@@ -1611,25 +1756,6 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       const kotNo = order.orderNo ?? order.id;
                       const items =
                         order.batches?.flatMap((b: any) => b.items) ?? [];
-                      const placedAt = new Date(
-                        order.createdAt,
-                      ).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      });
-                      const doneAt = order.completedAt
-                        ? new Date(order.completedAt).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : null;
-                      const delivAt =
-                        ks === "DELIVERED"
-                          ? new Date(order.updatedAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })
-                          : null;
 
                       return (
                         <div
@@ -1662,11 +1788,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               >
                                 <Printer className="h-3 w-3" /> KOT
                               </button>
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-[9px] font-black ${badgeCls}`}
-                              >
+                              <StatusBadge tone={badgeCls} size="sm">
                                 {badgeTxt}
-                              </span>
+                              </StatusBadge>
                             </div>
                           </div>
 
@@ -1852,11 +1976,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <div>
                       <p className="text-[10px] text-gray-500">Table Total</p>
                       <p className="text-xl font-black text-red-600">
-                        ₹
-                        {tableOrders.reduce(
-                          (s, o) => s + (o.totalAmount || 0),
-                          0,
-                        ) + grandTotal}
+                        ₹{tableOrdersTotal + grandTotal}
                       </p>
                     </div>
                     {canCheckout && tableOrders.length > 0 && (

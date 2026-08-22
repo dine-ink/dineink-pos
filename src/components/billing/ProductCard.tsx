@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Plus, Minus } from "lucide-react";
 
 type Props = {
@@ -7,7 +8,7 @@ type Props = {
   decreaseQty: any;
 };
 
-export default function ProductCard({
+function ProductCard({
   product,
   qty,
   increaseQty,
@@ -71,3 +72,5 @@ export default function ProductCard({
     </div>
   );
 }
+
+export default memo(ProductCard);
