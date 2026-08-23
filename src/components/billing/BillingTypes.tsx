@@ -1,3 +1,5 @@
+import { resolveBillingScreens, BILLING_SCREEN_META } from "@/constants/billing";
+
 type Props = {
   billingType: string;
   setBillingType: any;
@@ -11,18 +13,18 @@ export default function BillingTypeTabs({
   setSelectedTable,
   branchData,
 }: Props) {
-  const billingTypes = branchData?.billing?.billingTypes || [];
-
-  const billingTabs = [];
-  if (billingTypes.includes("Table Wise Billing")) {
-    billingTabs.push({ key: "DINE_IN", label: "Dine In", emoji: "🍽" });
-  }
-  // Take Away and Quick Bill share one tab/screen now — which of the two an
-  // order actually is gets picked at checkout, right before the bill is
-  // generated, instead of forcing that choice upfront here.
-  if (billingTypes.includes("Takeaway Billing") || billingTypes.includes("Quick Billing")) {
-    billingTabs.push({ key: "TAKEAWAY_QUICK", label: "Takeaway / Quick", emoji: "🛍" });
-  }
+  // Shared with BillingPage so the tab strip and the screen it switches to can
+  // never disagree about which billing types a branch has enabled. This used to
+  // match only owner-web's human labels and missed the enum spelling entirely —
+  // see constants/billing.ts.
+  //
+  // Take Away and Quick Bill share one tab/screen: which of the two an order
+  // actually is gets picked at checkout, right before the bill is generated,
+  // instead of forcing that choice upfront here.
+  const billingTabs = resolveBillingScreens(branchData?.billing?.billingTypes).map((key) => ({
+    key,
+    ...BILLING_SCREEN_META[key],
+  }));
 
   if (billingTabs.length === 0) return null;
 

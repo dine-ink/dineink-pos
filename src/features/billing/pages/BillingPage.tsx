@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAppSelector } from "@/store/hooks";
 import BillingTypeTabs from "../../../components/billing/BillingTypes";
 import DineIn from "./DineIn_Billing";
@@ -10,7 +10,9 @@ import PageLoader from "@/components/ui/PageLoader";
 import PrinterSetupModal from "@/components/PrinterSetupModal";
 import { getSavedPrinter } from "@/utils/printer";
 import { usePolling } from "@/hooks/usePolling";
-import { Printer } from "lucide-react";
+import { Printer, SlidersHorizontal } from "lucide-react";
+import { resolveBillingScreens, type BillingScreen } from "@/constants/billing";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export default function BillingPage() {
   const { user } = useAppSelector((state) => state.auth);
@@ -81,13 +83,22 @@ export default function BillingPage() {
     [user?.restaurantId, user?.branchId],
   );
 
+  // Which screens this branch has enabled, tolerant of both spellings found in
+  // production data (see constants/billing.ts — matching only owner-web's human
+  // labels left every seeded branch with a blank Billing tab).
+  const availableScreens = useMemo(
+    () => resolveBillingScreens(branchData?.billing?.billingTypes),
+    [branchData],
+  );
+
   useEffect(() => {
-    const billingTypes = branchData?.billing?.billingTypes || [];
-    if (billingTypes.includes("Table Wise Billing")) setBillingType("DINE_IN");
-    else if (billingTypes.includes("Takeaway Billing") || billingTypes.includes("Quick Billing")) {
-      setBillingType("TAKEAWAY_QUICK");
+    // Default to the first enabled screen, and correct the selection if the
+    // branch's config no longer includes whatever was previously chosen.
+    if (availableScreens.length === 0) return;
+    if (!availableScreens.includes(billingType as BillingScreen)) {
+      setBillingType(availableScreens[0]);
     }
-  }, [branchData]);
+  }, [availableScreens, billingType]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -125,6 +136,18 @@ export default function BillingPage() {
       <div className="flex-1 min-h-0 overflow-hidden p-1.5 sm:p-2 xl:p-2.5">
         {loading && !branchData ? (
           <PageLoader />
+        ) : availableScreens.length === 0 ? (
+          /* Previously this fell through to `null` — a blank white screen with
+             no explanation, which is what a branch with no recognised billing
+             types actually got. An explicit, actionable empty state instead:
+             the fix is a settings change, and nobody could have guessed that
+             from an empty page. */
+          <EmptyState
+            icon={<SlidersHorizontal className="h-10 w-10 text-subtle-foreground" />}
+            title="No billing type enabled for this branch"
+            description="Turn on Table Wise, Takeaway or Quick Billing for this branch in the owner dashboard under Settings → Branches, then reopen this tab."
+            className="h-full"
+          />
         ) : billingType === "DINE_IN" ? (
           <DineIn
             step={step}
