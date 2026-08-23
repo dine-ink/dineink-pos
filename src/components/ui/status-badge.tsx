@@ -19,7 +19,7 @@ export function StatusBadge({ tone, size = "sm", className, children }: StatusBa
     <span
       className={cn(
         "inline-flex items-center rounded-full px-2 py-0.5",
-        size === "sm" ? "text-[9px] font-black" : "text-[10px] font-bold",
+        size === "sm" ? "text-[0.6875rem] font-black" : "text-[0.6875rem] font-bold",
         tone,
         className,
       )}

@@ -9,6 +9,7 @@ import { saveRunningOrder, closeRunningOrder } from "@/services/runningOrderServ
 import { isNetworkError, enqueueBillAction, makeId } from "@/utils/offlineQueue";
 import { PauseCircle, Play } from "lucide-react";
 import { printReceipt, type BillData } from "@/utils/printer";
+import { useKitchenQueue } from "@/hooks/useKitchenQueue";
 
 type HeldOrder = {
   id: string;
@@ -255,6 +256,24 @@ export default function NormalBilling({
     [cartItems, cart, cartAddOns],
   );
 
+  // Live kitchen wait, so a captain can quote a time and steer the order
+  // toward whatever is actually quick right now. Advisory only — it never
+  // blocks or alters an order, and shows nothing when the kitchen can't be
+  // quoted (see useKitchenQueue).
+  const { estimate, estimateOrder, targetTicketMinutes } = useKitchenQueue();
+  const cartLines = useMemo(
+    () => cartItems.map((i: any) => ({ menuItemId: i.id, qty: cart[i.id] })),
+    [cartItems, cart],
+  );
+  const etaFor = useCallback(
+    (menuItemId: number) => estimate(menuItemId, 1, cartLines),
+    [estimate, cartLines],
+  );
+  const { estimate: orderEta, unpricedItems: etaUnpriced } = useMemo(
+    () => estimateOrder(cartLines),
+    [estimateOrder, cartLines],
+  );
+
   const handleConfirmOrder = async (billingData: any) => {
     if (!cartItems.length || submitting) return;
     setSubmitting(true);
@@ -419,7 +438,7 @@ export default function NormalBilling({
                 <div className="flex items-center gap-2 overflow-x-auto">
                   <div className="flex shrink-0 items-center gap-1 text-amber-700">
                     <PauseCircle className="h-3.5 w-3.5" />
-                    <span className="text-[10px] font-black uppercase tracking-wide">
+                    <span className="text-[0.6875rem] font-black uppercase tracking-wide">
                       On Hold ({heldOrders.length})
                     </span>
                   </div>
@@ -431,18 +450,18 @@ export default function NormalBilling({
                           className="flex items-center gap-1.5"
                         >
                           <Play className="h-3 w-3 text-amber-600" />
-                          <span className="max-w-[80px] truncate text-[11px] font-black text-gray-900">
+                          <span className="max-w-[80px] truncate text-xs font-black text-foreground">
                             {held.label}
                           </span>
-                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold text-amber-700">
+                          <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.6875rem] font-bold text-amber-700">
                             {held.itemCount} items
                           </span>
                         </button>
                         <button
                           onClick={() => discardHeldOrder(held.id)}
-                          className="ml-1 rounded p-0.5 text-gray-400 hover:bg-red-50 hover:text-red-500"
+                          className="ml-1 rounded p-0.5 text-subtle-foreground hover:bg-red-50 hover:text-red-500"
                         >
-                          <span className="text-[10px] font-black">×</span>
+                          <span className="text-[0.6875rem] font-black">×</span>
                         </button>
                       </div>
                     ))}
@@ -460,17 +479,19 @@ export default function NormalBilling({
                 activeCart={cart}
                 increaseQty={increaseQty}
                 decreaseQty={decreaseQty}
+                etaFor={etaFor}
+                targetMinutes={targetTicketMinutes}
               />
             </div>
 
             {/* Mobile bottom action bar */}
-            <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+            <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-border bg-white px-3 py-2 shadow-sm">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">
+                  <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-subtle-foreground">
                     {selectedOrderType === "TAKE_AWAY" ? "Takeaway" : "Quick Bill"}
                   </p>
-                  <p className="text-sm font-black text-gray-900">
+                  <p className="text-sm font-black text-foreground">
                     {totalItems} items ·{" "}
                     <span className="text-red-600">₹{grandTotal}</span>
                   </p>
@@ -498,20 +519,20 @@ export default function NormalBilling({
           </div>
 
           {/* RIGHT — DESKTOP CART PANEL */}
-          <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-            <div className="shrink-0 border-b border-gray-100 px-3 py-2.5">
-              <h3 className="text-sm font-black text-gray-900">
+          <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm">
+            <div className="shrink-0 border-b border-border px-3 py-2.5">
+              <h3 className="text-sm font-black text-foreground">
                 Current Order
               </h3>
-              <p className="text-[10px] text-gray-500 mt-0.5">
+              <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
                 {selectedOrderType === "TAKE_AWAY" ? "Takeaway" : "Quick Billing"}
               </p>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto p-2.5">
               {cartItems.length === 0 ? (
-                <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 p-6 text-center">
+                <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border p-6 text-center">
                   <span className="text-2xl">🛒</span>
-                  <p className="mt-2 text-xs font-bold text-gray-500">
+                  <p className="mt-2 text-xs font-bold text-muted-foreground">
                     No items yet
                   </p>
                 </div>
@@ -520,13 +541,13 @@ export default function NormalBilling({
                   {cartItems.map((item: any) => (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2"
+                      className="flex items-center justify-between rounded-lg border border-border bg-muted px-2.5 py-2"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs font-semibold text-gray-900">
+                        <p className="truncate text-xs font-semibold text-foreground">
                           {item.name}
                         </p>
-                        <p className="text-[10px] text-gray-500">
+                        <p className="text-[0.6875rem] text-muted-foreground">
                           × {cart[item.id]}
                         </p>
                       </div>
@@ -538,11 +559,11 @@ export default function NormalBilling({
                 </div>
               )}
             </div>
-            <div className="shrink-0 border-t border-gray-100 p-2.5 space-y-2">
+            <div className="shrink-0 border-t border-border p-2.5 space-y-2">
               {cartItems.length > 0 && (
                 <button
                   onClick={holdCurrentOrder}
-                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-1.5 text-[11px] font-bold text-amber-700 transition hover:bg-amber-100"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
                 >
                   <PauseCircle className="h-3.5 w-3.5" />
                   Hold Order
@@ -550,7 +571,7 @@ export default function NormalBilling({
               )}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] text-gray-500">Total</p>
+                  <p className="text-[0.6875rem] text-muted-foreground">Total</p>
                   <p className="text-lg font-black text-red-600">
                     ₹{grandTotal}
                   </p>
@@ -558,7 +579,7 @@ export default function NormalBilling({
                 <button
                   onClick={() => setStep("CART")}
                   disabled={!cartItems.length}
-                  className="rounded-lg bg-red-500 px-3 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50"
+                  className="rounded-lg bg-red-500 px-3 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-600 disabled:opacity-50"
                 >
                   View Cart
                 </button>
@@ -580,6 +601,9 @@ export default function NormalBilling({
           notes={cartNotes}
           setNote={(id, note) => setCartNotes((prev) => ({ ...prev, [id]: note }))}
           addOns={cartAddOns}
+          orderEta={orderEta}
+          etaUnpricedItems={etaUnpriced}
+          targetMinutes={targetTicketMinutes}
         />
       )}
       {step === "CUSTOMER" && (

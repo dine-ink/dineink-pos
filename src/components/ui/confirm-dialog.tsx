@@ -46,23 +46,23 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-sm rounded-2xl bg-white p-4 shadow-xl">
         <div className="flex items-center justify-between">
-          <h3 className="text-sm font-black text-gray-900">{title}</h3>
+          <h3 className="text-sm font-black text-foreground">{title}</h3>
           {showCloseIcon && (
             <button
               onClick={onCancel}
               aria-label="Close"
-              className="text-gray-400 hover:text-gray-600"
+              className="text-subtle-foreground hover:text-muted-foreground"
             >
               ✕
             </button>
           )}
         </div>
-        {description && <p className="mt-1 text-[12px] text-gray-500">{description}</p>}
+        {description && <p className="mt-1 text-[12px] text-muted-foreground">{description}</p>}
         {children}
         <div className="mt-4 flex gap-2">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-lg border border-gray-200 bg-white py-2.5 text-xs font-bold text-gray-700"
+            className="flex-1 rounded-lg border border-border bg-white py-2.5 text-xs font-bold text-foreground"
           >
             {cancelLabel}
           </button>

@@ -275,12 +275,12 @@ export default function CustomerSection({
 
   const paymentIcons: Record<string, string> = { cash: "💵", card: "💳", upi: "📱" };
 
-  const inputClass = "flex h-8 items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-2.5 focus-within:border-red-400 focus-within:bg-white transition";
+  const inputClass = "flex h-8 items-center gap-2 rounded-lg border border-border bg-muted px-2.5 focus-within:border-red-400 focus-within:bg-white transition";
 
   const billingRow = (label: React.ReactNode, value: React.ReactNode, isTotal = false) => (
-    <div className={`flex items-center justify-between px-2.5 py-2 xl:py-1 ${isTotal ? "bg-red-50" : "border-b border-gray-100"}`}>
-      <span className={`text-xs ${isTotal ? "font-black text-red-700" : "text-gray-600"}`}>{label}</span>
-      <span className={`text-xs font-bold ${isTotal ? "text-red-600" : "text-gray-800"}`}>{value}</span>
+    <div className={`flex items-center justify-between px-2.5 py-2 xl:py-1 ${isTotal ? "bg-red-50" : "border-b border-border"}`}>
+      <span className={`text-xs ${isTotal ? "font-black text-red-700" : "text-muted-foreground"}`}>{label}</span>
+      <span className={`text-xs font-bold ${isTotal ? "text-red-600" : "text-foreground"}`}>{value}</span>
     </div>
   );
 
@@ -295,22 +295,22 @@ export default function CustomerSection({
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* HEADER */}
-      <div className="shrink-0 flex items-center gap-2.5 border-b border-gray-100 bg-white px-3 py-2">
+      <div className="shrink-0 flex items-center gap-2.5 border-b border-border bg-white px-3 py-2">
         <button onClick={() => setStep("CART")}
-          className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50">
+          className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition hover:bg-muted">
           <ArrowLeft className="h-3.5 w-3.5" />
         </button>
         <div>
-          <h2 className="text-sm font-black text-gray-900">Checkout</h2>
-          <p className="text-[10px] text-gray-500">Customer & payment details</p>
+          <h2 className="text-sm font-black text-foreground">Checkout</h2>
+          <p className="text-[0.6875rem] text-muted-foreground">Customer & payment details</p>
         </div>
         {etaPrediction && (
           etaPrediction.sampleSize >= 5 ? (
-            <span className="ml-auto flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[10px] font-bold text-blue-700">
+            <span className="ml-auto flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2 py-1 text-[0.6875rem] font-bold text-blue-700">
               <Clock className="h-3 w-3" /> Est. ready in ~{etaPrediction.predictedMinutes} min
             </span>
           ) : (
-            <span className="ml-auto flex items-center gap-1 rounded-full border border-gray-100 bg-gray-50 px-2 py-1 text-[10px] font-medium text-gray-400">
+            <span className="ml-auto flex items-center gap-1 rounded-full border border-border bg-muted px-2 py-1 text-[0.6875rem] font-medium text-subtle-foreground">
               <Clock className="h-3 w-3" /> Not enough data for an ETA estimate yet
             </span>
           )
@@ -324,41 +324,41 @@ export default function CustomerSection({
             {/* LEFT */}
             <div className="space-y-2 xl:h-full xl:min-h-0 xl:space-y-1 xl:overflow-y-auto xl:pr-1">
               {/* CUSTOMER DETAILS */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
-                <h3 className="text-xs font-black text-gray-900">Customer Details</h3>
+              <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="text-xs font-black text-foreground">Customer Details</h3>
                 <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
                   <div>
-                    <label className="mb-1 block text-[10px] font-bold text-gray-700">Name</label>
+                    <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">Name</label>
                     <div className={inputClass}>
-                      <User className="h-3 w-3 shrink-0 text-gray-400" />
+                      <User className="h-3 w-3 shrink-0 text-subtle-foreground" />
                       <input value={customerName} onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="Customer name" className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
+                        placeholder="Customer name" className="flex-1 bg-transparent text-xs outline-none placeholder:text-subtle-foreground" />
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-[10px] font-bold text-gray-700">Phone</label>
+                    <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">Phone</label>
                     <div className={inputClass}>
-                      <Phone className="h-3 w-3 shrink-0 text-gray-400" />
+                      <Phone className="h-3 w-3 shrink-0 text-subtle-foreground" />
                       <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)}
-                        placeholder="Mobile number" type="tel" className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
+                        placeholder="Mobile number" type="tel" className="flex-1 bg-transparent text-xs outline-none placeholder:text-subtle-foreground" />
                     </div>
                   </div>
                 </div>
                 <div className="mt-2">
-                  <label className="mb-1 block text-[10px] font-bold text-gray-700">Address <span className="font-normal text-gray-400">(optional)</span></label>
+                  <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">Address <span className="font-normal text-subtle-foreground">(optional)</span></label>
                   <div className={inputClass}>
-                    <MapPin className="h-3 w-3 shrink-0 text-gray-400" />
+                    <MapPin className="h-3 w-3 shrink-0 text-subtle-foreground" />
                     <input value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)}
-                      placeholder="Delivery address" className="flex-1 bg-transparent text-xs outline-none placeholder:text-gray-400" />
+                      placeholder="Delivery address" className="flex-1 bg-transparent text-xs outline-none placeholder:text-subtle-foreground" />
                   </div>
                 </div>
                 {lookingUpCustomer && (
-                  <p className="mt-2 text-[10px] font-bold text-gray-400">Checking for returning customer...</p>
+                  <p className="mt-2 text-[0.6875rem] font-bold text-subtle-foreground">Checking for returning customer...</p>
                 )}
                 {returningCustomer && (
                   <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2">
                     <Star className="h-3.5 w-3.5 shrink-0 fill-amber-400 text-amber-500" />
-                    <p className="text-[11px] font-bold text-amber-800">
+                    <p className="text-xs font-bold text-amber-800">
                       Returning customer — {returningCustomer.visits} visit{returningCustomer.visits === 1 ? "" : "s"}
                       {" · "}{formatCurrency(returningCustomer.spend)} lifetime
                       {returningCustomer.lastVisit && (
@@ -370,39 +370,39 @@ export default function CustomerSection({
               </div>
 
               {/* BILLING DETAILS */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
-                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Billing Details</h3>
-                <div className="rounded-xl border border-gray-200 overflow-hidden">
+              <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Billing Details</h3>
+                <div className="rounded-xl border border-border overflow-hidden">
                   {billingRow(<span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Subtotal</span>, formatCurrency(subtotal))}
                   {discountAmount > 0 && billingRow(
                     <span className="flex items-center gap-1.5">
                       <Percent className="h-3 w-3" /> Discount
-                      {appliedCoupon && <span className="rounded bg-emerald-100 px-1 py-0.5 text-[9px] font-black text-emerald-700">{appliedCoupon.code}</span>}
+                      {appliedCoupon && <span className="rounded bg-emerald-100 px-1 py-0.5 text-[0.6875rem] font-black text-emerald-700">{appliedCoupon.code}</span>}
                     </span>,
-                    <span className="text-[11px] font-bold text-red-500">-{formatCurrency(discountAmount)}</span>
+                    <span className="text-xs font-bold text-red-500">-{formatCurrency(discountAmount)}</span>
                   )}
                   {billingRow(
                     <span className="flex items-center gap-1.5"><ShoppingBag className="h-3 w-3" /> Packing</span>,
                     <div className="flex items-center gap-1.5">
-                      <div className="flex h-6 w-16 items-center rounded-md border border-gray-200 bg-white px-1.5">
+                      <div className="flex h-6 w-16 items-center rounded-md border border-border bg-white px-1.5">
                         <input type="number" value={packingCharge} onChange={(e) => setPackingCharge(Number(e.target.value))}
-                          className="w-full text-[10px] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                          className="w-full text-[0.6875rem] outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       </div>
-                      <span className="text-[11px] font-bold text-gray-700">+{formatCurrency(packing)}</span>
+                      <span className="text-xs font-bold text-foreground">+{formatCurrency(packing)}</span>
                     </div>
                   )}
                   {serviceChargePercentage > 0 && billingRow(
                     <span className="flex items-center gap-1.5"><Wallet className="h-3 w-3" /> Service ({serviceChargePercentage}%)</span>,
                     <div className="flex items-center gap-2">
-                      <span className={`text-[11px] font-bold ${applyServiceCharge ? "text-gray-700" : "text-gray-400 line-through"}`}>
+                      <span className={`text-xs font-bold ${applyServiceCharge ? "text-foreground" : "text-subtle-foreground line-through"}`}>
                         +{formatCurrency((subtotal - discountAmount + packing) * serviceChargePercentage / 100)}
                       </span>
                       <button
                         onClick={() => setApplyServiceCharge(!applyServiceCharge)}
-                        className={`rounded-full px-2 py-0.5 text-[9px] font-black transition ${
+                        className={`rounded-full px-2 py-0.5 text-[0.6875rem] font-black transition ${
                           applyServiceCharge
                             ? "bg-red-100 text-red-600 hover:bg-red-200"
-                            : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                            : "bg-secondary text-muted-foreground hover:bg-secondary"
                         }`}
                       >
                         {applyServiceCharge ? "Opt Out" : "Opted Out"}
@@ -421,10 +421,10 @@ export default function CustomerSection({
                     <span className="flex items-center gap-1.5"><Info className="h-3 w-3" /> Round Off</span>,
                     <button
                       onClick={() => setRoundOff(!roundOff)}
-                      className={`rounded-full px-2.5 py-0.5 text-[9px] font-black transition ${
+                      className={`rounded-full px-2.5 py-0.5 text-[0.6875rem] font-black transition ${
                         roundOff
                           ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
-                          : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          : "bg-secondary text-muted-foreground hover:bg-secondary"
                       }`}
                     >
                       {roundOff ? "✓ Applied" : "Off"}
@@ -440,13 +440,13 @@ export default function CustomerSection({
             <div className="space-y-1.5 xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pr-1">
               {/* TOTAL PAYABLE */}
               <div className="rounded-xl bg-gradient-to-br from-red-500 to-rose-600 p-4 text-white shadow-lg shadow-red-200 xl:p-2.5">
-                <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">Total Payable</p>
+                <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-red-100">Total Payable</p>
                 <h1 className="mt-1 text-4xl font-black xl:text-2xl">{formatCurrency(finalPayable)}</h1>
                 {tipAmount > 0 && (
-                  <p className="mt-1 text-[11px] text-red-100">{formatCurrency(grandTotal)} bill + {formatCurrency(tipAmount)} tip</p>
+                  <p className="mt-1 text-xs text-red-100">{formatCurrency(grandTotal)} bill + {formatCurrency(tipAmount)} tip</p>
                 )}
                 {splitCount > 1 && (
-                  <p className="mt-1 text-[11px] text-red-100">Split {splitCount} ways · {formatCurrency(perPersonAmount)} per person</p>
+                  <p className="mt-1 text-xs text-red-100">Split {splitCount} ways · {formatCurrency(perPersonAmount)} per person</p>
                 )}
                 {balance > 0 && cashReceived && (
                   <p className="mt-1 text-xs text-red-100">Balance: {formatCurrency(balance)}</p>
@@ -454,36 +454,36 @@ export default function CustomerSection({
               </div>
 
               {/* DISCOUNT */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
-                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Discount</h3>
+              <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Discount</h3>
 
                 {/* % / ₹ toggle — disabled while a coupon is applied */}
                 <div className="flex items-center gap-1.5">
-                  <div className="flex rounded-lg border border-gray-200 p-0.5">
+                  <div className="flex rounded-lg border border-border p-0.5">
                     {(["PERCENT", "FIXED"] as const).map((mode) => (
                       <button
                         key={mode}
                         onClick={() => setDiscountMode(mode)}
                         disabled={!!appliedCoupon}
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
-                          discountMode === mode ? "bg-red-500 text-white" : "text-gray-500"
+                        className={`rounded-md px-2.5 py-1 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                          discountMode === mode ? "bg-red-500 text-white" : "text-muted-foreground"
                         }`}
                       >
                         {mode === "PERCENT" ? "%" : "₹"}
                       </button>
                     ))}
                   </div>
-                  <div className="flex h-8 flex-1 items-center rounded-lg border border-gray-200 bg-gray-50 px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
-                    {discountMode === "FIXED" && <span className="mr-1 text-xs font-bold text-gray-700">₹</span>}
+                  <div className="flex h-8 flex-1 items-center rounded-lg border border-border bg-muted px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
+                    {discountMode === "FIXED" && <span className="mr-1 text-xs font-bold text-foreground">₹</span>}
                     <input
                       type="number"
                       value={appliedCoupon ? "" : discountValue || ""}
                       onChange={(e) => setDiscountValue(Number(e.target.value) || 0)}
                       disabled={!!appliedCoupon}
                       placeholder={appliedCoupon ? "Coupon applied" : "0"}
-                      className="w-full bg-transparent text-xs outline-none disabled:text-gray-400 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="w-full bg-transparent text-xs outline-none disabled:text-subtle-foreground [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    {discountMode === "PERCENT" && !appliedCoupon && <span className="text-xs font-bold text-gray-700">%</span>}
+                    {discountMode === "PERCENT" && !appliedCoupon && <span className="text-xs font-bold text-foreground">%</span>}
                   </div>
                 </div>
 
@@ -493,54 +493,54 @@ export default function CustomerSection({
                 <div className="mt-1.5">
                   {appliedCoupon ? (
                     <div className="flex items-center justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5">
-                      <span className="flex items-center gap-1.5 text-[11px] font-black text-emerald-700">
+                      <span className="flex items-center gap-1.5 text-xs font-black text-emerald-700">
                         <Tag className="h-3 w-3" /> {appliedCoupon.code} applied
                       </span>
-                      <button onClick={handleRemoveCoupon} className="text-[10px] font-bold text-emerald-700 underline">
+                      <button onClick={handleRemoveCoupon} className="text-[0.6875rem] font-bold text-emerald-700 underline">
                         Remove
                       </button>
                     </div>
                   ) : !showCouponInput ? (
                     <button
                       onClick={() => setShowCouponInput(true)}
-                      className="flex items-center gap-1 text-[10px] font-bold text-gray-500 underline decoration-dotted underline-offset-2 hover:text-gray-700"
+                      className="flex items-center gap-1 text-[0.6875rem] font-bold text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
                     >
                       <Tag className="h-3 w-3" /> Have a coupon code?
                     </button>
                   ) : (
                     <div className="flex gap-1.5">
-                      <div className="flex h-8 flex-1 items-center rounded-lg border border-gray-200 bg-gray-50 px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
-                        <Tag className="mr-1.5 h-3 w-3 shrink-0 text-gray-400" />
+                      <div className="flex h-8 flex-1 items-center rounded-lg border border-border bg-muted px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
+                        <Tag className="mr-1.5 h-3 w-3 shrink-0 text-subtle-foreground" />
                         <input
                           autoFocus
                           value={couponCode}
                           onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); setCouponError(""); }}
                           placeholder="Coupon code"
-                          className="w-full bg-transparent text-xs outline-none uppercase placeholder:normal-case placeholder:text-gray-400"
+                          className="w-full bg-transparent text-xs outline-none uppercase placeholder:normal-case placeholder:text-subtle-foreground"
                         />
                       </div>
                       <button
                         onClick={handleApplyCoupon}
                         disabled={validatingCoupon || !couponCode.trim()}
-                        className="rounded-lg bg-gray-900 px-3 text-[11px] font-bold text-white disabled:opacity-40"
+                        className="rounded-lg bg-foreground px-3 text-xs font-bold text-white disabled:opacity-40"
                       >
                         {validatingCoupon ? "..." : "Apply"}
                       </button>
                     </div>
                   )}
-                  {couponError && <p className="mt-1 text-[10px] font-bold text-red-500">{couponError}</p>}
+                  {couponError && <p className="mt-1 text-[0.6875rem] font-bold text-red-500">{couponError}</p>}
                 </div>
 
                 {/* Manager approval gate for large manual discounts */}
                 {needsManagerApproval && (
                   <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5">
                     {managerApproval ? (
-                      <p className="flex items-center gap-1.5 text-[11px] font-black text-emerald-700">
+                      <p className="flex items-center gap-1.5 text-xs font-black text-emerald-700">
                         <CheckCircle className="h-3.5 w-3.5" /> Approved by {managerApproval.approverName}
                       </p>
                     ) : (
                       <>
-                        <p className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wide text-amber-700">
+                        <p className="flex items-center gap-1.5 text-[0.6875rem] font-black uppercase tracking-wide text-amber-700">
                           <Lock className="h-3 w-3" /> Manager approval required ({discountPercentOfSubtotal.toFixed(0)}% discount)
                         </p>
                         <div className="mt-1.5 flex gap-1.5">
@@ -554,12 +554,12 @@ export default function CustomerSection({
                           <button
                             onClick={handleVerifyManager}
                             disabled={verifyingManager || !managerPassword}
-                            className="rounded-lg bg-amber-500 px-3 text-[11px] font-bold text-white disabled:opacity-40"
+                            className="rounded-lg bg-amber-500 px-3 text-xs font-bold text-white disabled:opacity-40"
                           >
                             {verifyingManager ? "..." : "Verify"}
                           </button>
                         </div>
-                        {managerError && <p className="mt-1 text-[10px] font-bold text-red-500">{managerError}</p>}
+                        {managerError && <p className="mt-1 text-[0.6875rem] font-bold text-red-500">{managerError}</p>}
                       </>
                     )}
                   </div>
@@ -569,33 +569,33 @@ export default function CustomerSection({
               {/* SPLIT BILL + ORDER TYPE — paired side by side at xl, both being
                   compact selector widgets, to save a row of vertical space */}
               <div className="flex flex-col gap-1.5 xl:flex-row">
-                <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:flex-1 xl:p-2">
-                  <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Split Bill</h3>
+                <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:flex-1 xl:p-2">
+                  <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Split Bill</h3>
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setSplitCount((n) => Math.max(1, n - 1))}
                       disabled={splitCount <= 1}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground disabled:opacity-40"
                     >
                       −
                     </button>
                     <div className="flex-1 text-center">
-                      <p className="text-sm font-black text-gray-900">
+                      <p className="text-sm font-black text-foreground">
                         {splitCount === 1 ? "No split" : `${splitCount} ways`}
                       </p>
                       {splitCount > 1 && (
-                        <p className="text-[10px] text-gray-500">{formatCurrency(perPersonAmount)} each</p>
+                        <p className="text-[0.6875rem] text-muted-foreground">{formatCurrency(perPersonAmount)} each</p>
                       )}
                     </div>
                     <button
                       onClick={() => setSplitCount((n) => Math.min(20, n + 1))}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-gray-200 text-gray-600"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-border text-muted-foreground"
                     >
                       +
                     </button>
                   </div>
                   {splitCount > 1 && (
-                    <p className="mt-2 text-[10px] text-gray-400">
+                    <p className="mt-2 text-[0.6875rem] text-subtle-foreground">
                       One invoice as usual — this only prints {splitCount} copies showing each person's share.
                     </p>
                   )}
@@ -603,8 +603,8 @@ export default function CustomerSection({
 
                 {/* ORDER TYPE — picked right before the bill is generated */}
                 {orderTypeOptions && orderTypeOptions.length > 1 && (
-                  <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:flex-1 xl:p-2">
-                    <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Order Type</h3>
+                  <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:flex-1 xl:p-2">
+                    <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Order Type</h3>
                     <div className="flex flex-col gap-1.5">
                       {orderTypeOptions.map((opt) => {
                         const active = selectedOrderType === opt.key;
@@ -615,7 +615,7 @@ export default function CustomerSection({
                             className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
                               active
                                 ? "border-red-400 bg-red-50 text-red-600"
-                                : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                                : "border-border bg-white text-muted-foreground hover:border-input"
                             }`}
                           >
                             {opt.label}
@@ -629,8 +629,8 @@ export default function CustomerSection({
 
               {/* TIP */}
               {tipsEnabled && (
-                <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
-                  <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Add Tip</h3>
+                <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:p-2">
+                  <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Add Tip</h3>
                   <div className="flex items-center gap-1.5">
                     {[0, 5, 10, 15].map((pct) => {
                       const amount = pct === 0 ? 0 : Math.round((grandTotal * pct) / 100);
@@ -639,8 +639,8 @@ export default function CustomerSection({
                         <button
                           key={pct}
                           onClick={() => setTipAmount(amount)}
-                          className={`flex-1 rounded-lg border px-2 py-1.5 text-[11px] font-bold transition ${
-                            active ? "border-red-400 bg-red-50 text-red-600" : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
+                          className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-bold transition ${
+                            active ? "border-red-400 bg-red-50 text-red-600" : "border-border bg-white text-muted-foreground hover:border-input"
                           }`}
                         >
                           {pct === 0 ? "None" : `${pct}%`}
@@ -648,8 +648,8 @@ export default function CustomerSection({
                       );
                     })}
                   </div>
-                  <div className="mt-2 flex h-8 items-center rounded-lg border border-gray-200 bg-gray-50 px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
-                    <span className="mr-1 text-xs font-bold text-gray-700">₹</span>
+                  <div className="mt-2 flex h-8 items-center rounded-lg border border-border bg-muted px-2.5 focus-within:border-red-400 focus-within:bg-white transition">
+                    <span className="mr-1 text-xs font-bold text-foreground">₹</span>
                     <input
                       type="number"
                       value={tipAmount || ""}
@@ -662,18 +662,18 @@ export default function CustomerSection({
               )}
 
               {/* PAYMENT METHOD */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
-                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Payment Method</h3>
+              <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Payment Method</h3>
                 <div className="space-y-1.5 xl:space-y-1">
                   {paymentMethods.map((method: string) => {
                     const value = method.toLowerCase();
                     const active = paymentMethod === value;
                     const icon = paymentIcons[value] || "💰";
                     return (
-                      <label key={method} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition xl:p-1.5 ${active ? "border-red-400 bg-red-50" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                      <label key={method} className={`flex cursor-pointer items-center gap-2.5 rounded-xl border p-2.5 transition xl:p-1.5 ${active ? "border-red-400 bg-red-50" : "border-border bg-white hover:border-input"}`}>
                         <input type="radio" checked={active} onChange={() => setPaymentMethod(value)} className="hidden" />
-                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg xl:h-6 xl:w-6 xl:text-sm ${active ? "bg-red-100" : "bg-gray-100"}`}>{icon}</div>
-                        <p className="flex-1 text-xs font-bold text-gray-900">{method}</p>
+                        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg xl:h-6 xl:w-6 xl:text-sm ${active ? "bg-red-100" : "bg-secondary"}`}>{icon}</div>
+                        <p className="flex-1 text-xs font-bold text-foreground">{method}</p>
                         {active && <CheckCircle className="h-4 w-4 shrink-0 text-red-500" />}
                       </label>
                     );
@@ -683,24 +683,24 @@ export default function CustomerSection({
                 {/* UPI QR — only while UPI is the selected method; purely
                     informational, doesn't feed into any total/calculator */}
                 {paymentMethod === "upi" && (
-                  <div className="mt-2 rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                  <div className="mt-2 rounded-lg border border-border bg-muted p-2.5">
                     {upiQrLoading ? (
-                      <p className="text-[10px] font-bold text-gray-400">Loading UPI QR...</p>
+                      <p className="text-[0.6875rem] font-bold text-subtle-foreground">Loading UPI QR...</p>
                     ) : upiQr ? (
                       <div className="flex flex-col items-center gap-1">
                         <img
                           src={upiQr.qrCodeDataUrl}
                           alt="UPI QR code"
-                          className="h-28 w-28 rounded-md border border-gray-200 bg-white p-1 xl:h-24 xl:w-24"
+                          className="h-28 w-28 rounded-md border border-border bg-white p-1 xl:h-24 xl:w-24"
                         />
-                        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-black text-gray-900">
+                        <p className="mt-0.5 flex items-center gap-1 text-xs font-black text-foreground">
                           <QrCode className="h-3 w-3" /> {upiQr.displayName}
                         </p>
-                        <p className="text-[10px] font-medium text-gray-500">{upiQr.upiId}</p>
-                        <p className="text-[9px] text-gray-400">Scan with any UPI app to pay</p>
+                        <p className="text-[0.6875rem] font-medium text-muted-foreground">{upiQr.upiId}</p>
+                        <p className="text-[0.6875rem] text-subtle-foreground">Scan with any UPI app to pay</p>
                       </div>
                     ) : upiQrUnavailable ? (
-                      <p className="text-center text-[10px] font-medium text-gray-400">
+                      <p className="text-center text-[0.6875rem] font-medium text-subtle-foreground">
                         UPI QR not configured for this branch
                       </p>
                     ) : null}
@@ -709,15 +709,15 @@ export default function CustomerSection({
               </div>
 
               {/* CASH RECEIVED & BALANCE */}
-              <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm xl:p-2">
-                <h3 className="mb-2 text-xs font-black text-gray-900 xl:mb-1">Cash Payment</h3>
+              <div className="rounded-xl border border-border bg-white p-3 shadow-sm xl:p-2">
+                <h3 className="mb-2 text-xs font-black text-foreground xl:mb-1">Cash Payment</h3>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="mb-1 block text-[10px] font-bold text-gray-700">
-                      Cash Received <span className="font-normal text-gray-400">(opt)</span>
+                    <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">
+                      Cash Received <span className="font-normal text-subtle-foreground">(opt)</span>
                     </label>
                     <div className="flex h-8 items-center rounded-lg border-2 border-red-300 bg-white px-2.5 focus-within:border-red-500 transition">
-                      <span className="mr-1 text-xs font-bold text-gray-700">₹</span>
+                      <span className="mr-1 text-xs font-bold text-foreground">₹</span>
                       <input
                         type="number"
                         value={cashReceived}
@@ -728,7 +728,7 @@ export default function CustomerSection({
                     </div>
                   </div>
                   <div>
-                    <label className="mb-1 block text-[10px] font-bold text-gray-700">Balance Due</label>
+                    <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">Balance Due</label>
                     <div className="flex h-8 items-center rounded-lg bg-emerald-50 px-2.5">
                       <span className="text-sm font-black text-emerald-700">
                         {balance > 0 ? formatCurrency(balance) : formatCurrency(0)}
@@ -743,15 +743,15 @@ export default function CustomerSection({
       </div>
 
       {/* CONFIRM — laptop/monitor: pinned footer so it's always visible, no page scroll needed */}
-      <div className="hidden shrink-0 flex-col gap-1.5 border-t border-gray-100 bg-white p-2.5 xl:flex">
+      <div className="hidden shrink-0 flex-col gap-1.5 border-t border-border bg-white p-2.5 xl:flex">
         {discountLocked && (
-          <p className="text-center text-[10px] font-bold text-amber-600">Manager approval required to confirm this discount</p>
+          <p className="text-center text-[0.6875rem] font-bold text-amber-600">Manager approval required to confirm this discount</p>
         )}
         <div className="flex gap-2">
           <button
             onClick={() => onConfirm(buildConfirmPayload(false))}
             disabled={loading || discountLocked}
-            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 transition hover:bg-gray-50 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex h-10 flex-1 items-center justify-center gap-1.5 rounded-xl border border-input bg-white text-xs font-bold text-foreground transition hover:bg-muted active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <CheckCircle className="h-4 w-4" />
             {loading ? "..." : "Confirm"}
@@ -768,15 +768,15 @@ export default function CustomerSection({
       </div>
 
       {/* MOBILE CONFIRM */}
-      <div className="xl:hidden shrink-0 flex-col border-t border-gray-100 bg-white p-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex gap-1.5">
+      <div className="xl:hidden shrink-0 flex-col border-t border-border bg-white p-2.5 pb-[calc(0.625rem+env(safe-area-inset-bottom))] flex gap-1.5">
         {discountLocked && (
-          <p className="text-center text-[10px] font-bold text-amber-600">Manager approval required to confirm this discount</p>
+          <p className="text-center text-[0.6875rem] font-bold text-amber-600">Manager approval required to confirm this discount</p>
         )}
         <div className="flex gap-2">
           <button
             onClick={() => onConfirm(buildConfirmPayload(false))}
             disabled={loading || discountLocked}
-            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-300 bg-white text-xs font-bold text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            className="flex h-12 flex-1 items-center justify-center gap-1.5 rounded-xl border border-input bg-white text-xs font-bold text-foreground disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <CheckCircle className="h-4 w-4" />
             {loading ? "..." : "Confirm"}

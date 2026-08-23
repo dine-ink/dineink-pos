@@ -94,16 +94,16 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
         onClick={e => e.stopPropagation()}
       >
         {/* drag handle */}
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-gray-200" />
+        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-secondary" />
 
         {/* header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div className="flex items-center gap-2">
             <Printer className="h-4 w-4 text-red-500" />
-            <h2 className="text-sm font-black text-gray-900">Printer Setup</h2>
+            <h2 className="text-sm font-black text-foreground">Printer Setup</h2>
           </div>
-          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-gray-100 transition">
-            <X className="h-4 w-4 text-gray-500" />
+          <button onClick={onClose} aria-label="Close" className="rounded-lg p-1.5 hover:bg-secondary transition">
+            <X className="h-4 w-4 text-muted-foreground" />
           </button>
         </div>
 
@@ -113,13 +113,13 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 space-y-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-wide text-emerald-700">Active Printer</p>
-                  <p className="text-xs font-bold text-gray-900 mt-0.5">{saved.name}</p>
-                  <p className="text-[10px] text-gray-500 capitalize mt-0.5">{saved.type}</p>
+                  <p className="text-[0.6875rem] font-black uppercase tracking-wide text-emerald-700">Active Printer</p>
+                  <p className="text-xs font-bold text-foreground mt-0.5">{saved.name}</p>
+                  <p className="text-[0.6875rem] text-muted-foreground capitalize mt-0.5">{saved.type}</p>
                 </div>
                 <button
                   onClick={removePrinter}
-                  className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-red-500 hover:bg-red-50 transition"
+                  className="flex items-center gap-1 rounded-lg border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-500 hover:bg-red-50 transition"
                 >
                   <Trash2 className="h-3 w-3" />
                   Remove
@@ -130,7 +130,7 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
               <button
                 onClick={runTestPrint}
                 disabled={testState === 'testing'}
-                className={`flex w-full items-center justify-center gap-2 rounded-lg py-2 text-[11px] font-black transition ${
+                className={`flex w-full items-center justify-center gap-2 rounded-lg py-2 text-xs font-black transition ${
                   testState === 'ok'
                     ? 'bg-emerald-500 text-white'
                     : testState === 'fail'
@@ -150,19 +150,19 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
               </button>
 
               {testState === 'fail' && testError && (
-                <p className="text-[10px] text-red-600 leading-relaxed">{testError}</p>
+                <p className="text-[0.6875rem] text-red-600 leading-relaxed">{testError}</p>
               )}
             </div>
           )}
 
           {/* tabs */}
-          <div className="flex gap-1 rounded-xl border border-gray-200 bg-gray-50 p-1">
+          <div className="flex gap-1 rounded-xl border border-border bg-muted p-1">
             {(['bluetooth', 'wifi'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => { setTab(t); setBtError(null); }}
                 className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs font-bold transition ${
-                  tab === t ? 'bg-red-500 text-white shadow-sm' : 'text-gray-600 hover:bg-white'
+                  tab === t ? 'bg-red-500 text-white shadow-sm' : 'text-muted-foreground hover:bg-white'
                 }`}
               >
                 {t === 'bluetooth'
@@ -176,7 +176,7 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
           {/* bluetooth panel */}
           {tab === 'bluetooth' && (
             <div className="space-y-2">
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-700">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
                 Before scanning: make sure your printer is <strong>paired</strong> in Android
                 Settings → Bluetooth. Then tap Scan below.
               </div>
@@ -184,7 +184,7 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
               <button
                 onClick={scanBluetooth}
                 disabled={scanning}
-                className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white py-2.5 text-xs font-bold text-gray-700 hover:border-red-300 transition disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-border bg-white py-2.5 text-xs font-bold text-foreground hover:border-red-300 transition disabled:opacity-50"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${scanning ? 'animate-spin' : ''}`} />
                 {scanning ? 'Scanning...' : 'Scan Paired Devices'}
@@ -193,13 +193,13 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
               {btError && (
                 <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5">
                   <AlertCircle className="h-3.5 w-3.5 shrink-0 text-red-500 mt-0.5" />
-                  <p className="text-[11px] text-red-700">{btError}</p>
+                  <p className="text-xs text-red-700">{btError}</p>
                 </div>
               )}
 
               <div className="max-h-52 space-y-1.5 overflow-y-auto">
                 {btDevices.length === 0 && !scanning && !btError && (
-                  <p className="rounded-xl border border-dashed border-gray-200 py-6 text-center text-xs text-gray-400">
+                  <p className="rounded-xl border border-dashed border-border py-6 text-center text-xs text-subtle-foreground">
                     Tap Scan to find your paired Bluetooth printer.
                   </p>
                 )}
@@ -214,12 +214,12 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
                       className={`flex w-full items-center justify-between rounded-xl border px-3 py-2.5 transition ${
                         active
                           ? 'border-emerald-400 bg-emerald-50'
-                          : 'border-gray-200 bg-gray-50 hover:border-red-300 hover:bg-red-50'
+                          : 'border-border bg-muted hover:border-red-300 hover:bg-red-50'
                       }`}
                     >
                       <div className="text-left">
-                        <p className="text-xs font-bold text-gray-900">{device.name || 'Unknown Device'}</p>
-                        <p className="text-[10px] text-gray-500">{device.address}</p>
+                        <p className="text-xs font-bold text-foreground">{device.name || 'Unknown Device'}</p>
+                        <p className="text-[0.6875rem] text-muted-foreground">{device.address}</p>
                       </div>
                       {active && <Check className="h-4 w-4 shrink-0 text-emerald-500" />}
                     </button>
@@ -232,29 +232,29 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
           {/* wifi panel */}
           {tab === 'wifi' && (
             <div className="space-y-2">
-              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] text-blue-700 space-y-1">
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700 space-y-1">
                 <p>The app sends the bill <strong>directly to the printer</strong> over your WiFi network — no dialog, no popup.</p>
                 <p>Make sure your phone is connected to the <strong>same WiFi as the printer</strong> (or the printer's own hotspot).</p>
               </div>
 
               <div className="grid grid-cols-3 gap-2">
                 <div className="col-span-2">
-                  <label className="mb-1 block text-[10px] font-bold text-gray-700">IP Address</label>
+                  <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">IP Address</label>
                   <input
                     value={wifiIp}
                     onChange={e => setWifiIp(e.target.value)}
                     placeholder="192.168.1.100"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-red-400 transition"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-xs outline-none focus:border-red-400 transition"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-[10px] font-bold text-gray-700">Port</label>
+                  <label className="mb-1 block text-[0.6875rem] font-bold text-foreground">Port</label>
                   <input
                     value={wifiPort}
                     onChange={e => setWifiPort(e.target.value)}
                     placeholder="9100"
                     type="number"
-                    className="w-full rounded-lg border border-gray-200 px-3 py-2 text-xs outline-none focus:border-red-400 transition"
+                    className="w-full rounded-lg border border-border px-3 py-2 text-xs outline-none focus:border-red-400 transition"
                   />
                 </div>
               </div>
@@ -262,13 +262,13 @@ export default function PrinterSetupModal({ isOpen, onClose }: Props) {
               {/* IP help toggle */}
               <button
                 onClick={() => setShowIpHelp(v => !v)}
-                className="flex items-center gap-1.5 text-[11px] font-semibold text-red-500"
+                className="flex items-center gap-1.5 text-xs font-semibold text-red-500"
               >
                 <Info className="h-3.5 w-3.5" />
                 {showIpHelp ? 'Hide help' : 'How to find my printer\'s IP address?'}
               </button>
               {showIpHelp && (
-                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2.5 space-y-1.5 text-[11px] text-gray-600">
+                <div className="rounded-xl border border-border bg-muted px-3 py-2.5 space-y-1.5 text-xs text-muted-foreground">
                   <p><strong>Method 1 — Config print:</strong> Hold the Feed button on the printer for 5 sec while powered on. It prints a sheet with IP and WiFi info.</p>
                   <p><strong>Printer hotspot (AP mode):</strong> If your phone is connected to the printer's own WiFi (e.g. KPC307-UEWB-xxxx), the IP is usually <strong>192.168.223.1</strong> and port <strong>9100</strong>.</p>
                   <p><strong>Same router (STA mode):</strong> If both phone and printer are on your shop WiFi, check the router admin (192.168.1.1) → DHCP clients to find the printer's assigned IP.</p>

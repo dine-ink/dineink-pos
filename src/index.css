@@ -1,13 +1,33 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-/* Remap Tailwind's default red and rose color scales to owner-web's brand
-   palette (#b10000 primary, #950000 and #8f0000 hover shades) so every
-   existing red or rose utility class across the app picks up the same
-   theme automatically, with no per-file class changes needed. rose is
-   mapped identically to red since this app only ever uses it as part of a
-   red gradient, not as a distinct accent. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   DineInk POS design tokens
+   ───────────────────────────────────────────────────────────────────────────
+   Two layers, deliberately separate:
+
+   1. BRAND SCALE — Tailwind's default red/rose scales remapped onto
+      owner-web's brand palette (#b10000 primary), so every pre-existing red-*
+      / rose-* utility across the app picks up the theme with no per-file
+      change. This layer predates the redesign and is left intact.
+
+   2. SEMANTIC ROLES — background/foreground/card/muted/border/ring plus the
+      state colors. These are what new screens are built from, and they also
+      fix a latent gap: the shadcn primitives in components/ui (button,
+      dialog, sheet, accordion) were generated referencing bg-primary,
+      bg-muted, border-border and friends, but nothing ever defined those
+      variables — so in Tailwind v4 those utilities produced NO css at all and
+      the primitives rendered unstyled. Defining them here makes that whole
+      folder usable rather than dead scaffolding.
+
+   Dark values live under an explicit `.dark` class rather than
+   prefers-color-scheme, so nothing switches until a toggle opts in. A POS
+   runs under fixed restaurant lighting; following the device theme would flip
+   the till to dark mid-shift because someone's phone hit sunset.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @theme {
+  /* ── 1. Brand scale ───────────────────────────────────────────────────── */
   --color-red-50: #fdf1f1;
   --color-red-100: #fbe1e1;
   --color-red-200: #f8c9c9;
@@ -31,6 +51,101 @@
   --color-rose-800: #700000;
   --color-rose-900: #560000;
   --color-rose-950: #350000;
+
+  /* ── 2. Semantic roles ────────────────────────────────────────────────── */
+  /* Neutrals carry a slight warm bias so they sit with the brand red instead
+     of the blue-grey cast a pure neutral would give it. */
+  --color-background: #f7f6f5;
+  --color-foreground: #17120f;
+
+  --color-card: #ffffff;
+  --color-card-foreground: #17120f;
+
+  --color-popover: #ffffff;
+  --color-popover-foreground: #17120f;
+
+  /* Body copy that isn't primary, and the quieter label tier below it. */
+  --color-secondary: #f1efed;
+  --color-secondary-foreground: #3c3532;
+  --color-muted: #f1efed;
+  --color-muted-foreground: #6e6663;
+  --color-subtle-foreground: #938b87;
+
+  --color-border: #e4e0dd;
+  --color-input: #d6d0cc;
+  --color-ring: #e46c6c;
+
+  --color-primary: #b10000;
+  --color-primary-foreground: #ffffff;
+
+  /* State colors. Kept distinct from the brand red so "destructive" never
+     reads as "branded" — an important separation on a till, where red is both
+     the house colour and the colour of a void. */
+  --color-destructive: #c02626;
+  --color-destructive-foreground: #ffffff;
+  --color-success: #17753f;
+  --color-success-foreground: #ffffff;
+  --color-success-muted: #e8f4ec;
+  --color-warning: #9a5b06;
+  --color-warning-foreground: #ffffff;
+  --color-warning-muted: #fdf1e0;
+  --color-info: #1d5a86;
+  --color-info-foreground: #ffffff;
+  --color-info-muted: #e8f1f7;
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  /* Geist ships with the app (@fontsource-variable/geist, imported in
+     main.tsx) rather than loading from a CDN — a till is frequently offline,
+     and a webfont fetch that fails would silently fall back mid-shift. */
+  --font-sans: "Geist Variable", ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* ── Radii ────────────────────────────────────────────────────────────── */
+  --radius-card: 0.875rem;
+  --radius-control: 0.625rem;
+
+  /* ── Touch sizing ─────────────────────────────────────────────────────── */
+  /* 44px is the Apple HIG / Material minimum for a reliable finger target.
+     Much of the original UI used 28–32px controls, which are fine with a
+     mouse and genuinely difficult on a greasy tablet mid-service. Every
+     interactive primitive is built off these. */
+  --size-touch: 2.75rem;
+  --size-touch-sm: 2.375rem;
+  --size-touch-lg: 3.25rem;
+}
+
+.dark {
+  --color-background: #14100f;
+  --color-foreground: #f4efed;
+
+  --color-card: #1d1817;
+  --color-card-foreground: #f4efed;
+
+  --color-popover: #241e1d;
+  --color-popover-foreground: #f4efed;
+
+  --color-secondary: #2a2322;
+  --color-secondary-foreground: #ded6d3;
+  --color-muted: #241e1d;
+  --color-muted-foreground: #a79e9a;
+  --color-subtle-foreground: #7d7471;
+
+  --color-border: #322a28;
+  --color-input: #443a37;
+  --color-ring: #e46c6c;
+
+  --color-primary: #d93a2b;
+  --color-primary-foreground: #ffffff;
+
+  --color-destructive: #e8574a;
+  --color-success: #56b880;
+  --color-success-muted: #14251c;
+  --color-warning: #d9a253;
+  --color-warning-muted: #261c0e;
+  --color-info: #74acd0;
+  --color-info-muted: #132028;
 }
 
 html,
@@ -42,19 +157,44 @@ body,
 
 body {
   margin: 0;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
   /* Cuts the ~300ms tap delay and stray double-tap-zoom on Android
      WebView/Chrome, and removes the default gray tap-highlight flash so
      button presses feel instant/native instead of "web page"-ish. */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* iOS Safari/WebView bounces the whole document past its bounds, which on a
+     fixed-shell app drags the header away from the top of the screen. */
+  overscroll-behavior: none;
+}
+
+/* Stops iOS zooming the viewport when a sub-16px input takes focus — it never
+   zooms back out, so a cashier ends up stranded on a magnified till. */
+input,
+select,
+textarea {
+  font-size: max(16px, 1em);
 }
 
 /* Visible keyboard-focus indicator app-wide. Only fires for keyboard/
    programmatic focus (:focus-visible), never for mouse/touch, so it adds
    no visual noise to click-driven interactions. */
 :focus-visible {
-  outline: 2px solid var(--color-red-400);
+  outline: 2px solid var(--color-ring);
   outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Hide scrollbar utility */
@@ -64,4 +204,27 @@ body {
 }
 .hide-scrollbar::-webkit-scrollbar {
   display: none;
+}
+
+/* ── Safe areas ───────────────────────────────────────────────────────────
+   index.html already sets viewport-fit=cover, which is what exposes these
+   env() values. Named utilities rather than repeated arbitrary values so the
+   notch/home-indicator handling is consistent on iPhone and on Android
+   gesture-nav devices. */
+@utility pad-safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pad-safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@utility pad-safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Numeric columns — money, quantities, times — line up only with tabular
+   figures. Geist's proportional digits drift by a pixel or two per row, which
+   is exactly enough to make a column of totals look untrustworthy. */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
 }

@@ -42,6 +42,12 @@ export default function CashSession() {
     (p: any) => p.method === "CASH",
   )?.amount || 0;
   const liveExpectedCash = Number(openSession?.openingCash || 0) + Number(liveShiftCash);
+  // How much the drawer is DOWN, if it is. Only meaningful once a count has
+  // been typed and there's an expectation to compare against; 0 covers both
+  // "not yet counted" and "over", so the prompts below stay quiet unless
+  // there's a genuine shortfall to explain.
+  const shortfall =
+    actualCash && liveExpectedCash > 0 ? Math.max(0, liveExpectedCash - Number(actualCash)) : 0;
 
   const fetchSessions = async () => {
     if (!user?.branchId) return;
@@ -223,18 +229,18 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500">
+          <div className="flex h-10 w-10 items-center justify-center rounded-control bg-red-500">
             <Wallet className="h-4 w-4 text-white" />
           </div>
           <div>
-            <p className="text-sm font-black tracking-tight text-gray-900">Counter Cash</p>
-            <p className="text-[10px] text-gray-500">{today}</p>
+            <p className="text-sm font-black tracking-tight text-foreground">Counter Cash</p>
+            <p className="text-[0.6875rem] text-muted-foreground">{today}</p>
           </div>
         </div>
         <button
           onClick={fetchSessions}
           aria-label="Refresh sessions"
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-500 hover:text-red-500"
+          className="flex h-10 w-10 items-center justify-center rounded-control border border-border bg-white text-muted-foreground hover:text-red-500"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -242,9 +248,9 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
 
       {/* Other cashiers' open sessions — each till is separate, this is informational */}
       {otherOpenSessions.length > 0 && (
-        <div className="flex items-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+        <div className="flex items-center gap-1.5 rounded-control border border-blue-100 bg-blue-50 px-3 py-2">
           <Users className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-          <p className="text-[11px] font-semibold text-blue-700">
+          <p className="text-xs font-semibold text-blue-700">
             {otherOpenSessions.map((s) => s.openedBy?.name || "Someone").join(", ")}
             {otherOpenSessions.length > 1 ? " also have" : " also has"} an open drawer right now.
           </p>
@@ -253,11 +259,11 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
 
       {/* Current session status */}
       {openSession ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3">
+        <div className="rounded-control border border-emerald-200 bg-emerald-50 p-4 space-y-3">
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-xs font-bold text-emerald-700">Session Open</p>
-            <span className="text-[10px] text-emerald-600">
+            <span className="text-[0.6875rem] text-emerald-600">
               {formatTime(openSession.openedAt)}
             </span>
             <button
@@ -271,53 +277,53 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
               })}
               title="Print X-Report (mid-shift summary)"
               aria-label="Print X-Report"
-              className="ml-auto flex h-9 w-9 items-center justify-center rounded-lg bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
+              className="ml-auto flex h-10 w-10 items-center justify-center rounded-control bg-white text-emerald-600 border border-emerald-200 hover:bg-emerald-100"
             >
               <Printer className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg bg-white border border-emerald-100 px-3 py-2">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Opening Cash</p>
-              <p className="text-sm font-black text-gray-900">{formatCurrency(openSession.openingCash)}</p>
+            <div className="rounded-control bg-white border border-emerald-100 px-3 py-2">
+              <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Opening Cash</p>
+              <p className="text-sm font-black text-foreground">{formatCurrency(openSession.openingCash)}</p>
             </div>
-            <div className="rounded-lg bg-white border border-emerald-100 px-3 py-2">
-              <p className="text-[10px] text-gray-500 uppercase tracking-wide">Opened By</p>
-              <p className="text-sm font-bold text-gray-900 truncate">{openSession.openedBy?.name ?? "—"}</p>
+            <div className="rounded-control bg-white border border-emerald-100 px-3 py-2">
+              <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Opened By</p>
+              <p className="text-sm font-bold text-foreground truncate">{openSession.openedBy?.name ?? "—"}</p>
             </div>
           </div>
 
           {/* Shift sales summary */}
           {shiftSummary && (
-            <div className="rounded-lg border border-emerald-100 bg-white p-3 space-y-2">
+            <div className="rounded-control border border-emerald-100 bg-white p-3 space-y-2">
               <div className="flex items-center gap-1.5">
                 <Receipt className="h-3.5 w-3.5 text-emerald-600" />
-                <p className="text-[11px] font-bold text-gray-700">Today's Sales</p>
+                <p className="text-xs font-bold text-foreground">Today's Sales</p>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <div>
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Revenue</p>
-                  <p className="text-sm font-black text-gray-900">
+                  <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Revenue</p>
+                  <p className="text-sm font-black text-foreground">
                     {formatCurrency(shiftSummary.totalRevenue)}
                   </p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Bills</p>
-                  <p className="text-sm font-black text-gray-900">{shiftSummary.billCount}</p>
+                  <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Bills</p>
+                  <p className="text-sm font-black text-foreground">{shiftSummary.billCount}</p>
                 </div>
                 <div>
-                  <p className="text-[9px] text-gray-500 uppercase tracking-wide">Avg Bill</p>
-                  <p className="text-sm font-black text-gray-900">
+                  <p className="text-[0.6875rem] text-muted-foreground uppercase tracking-wide">Avg Bill</p>
+                  <p className="text-sm font-black text-foreground">
                     {formatCurrency(shiftSummary.avgBillValue)}
                   </p>
                 </div>
               </div>
               {shiftSummary.paymentBreakdown?.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 border-t border-gray-100 pt-2">
+                <div className="flex flex-wrap gap-1.5 border-t border-border pt-2">
                   {shiftSummary.paymentBreakdown.map((p: any) => (
                     <span
                       key={p.method}
-                      className="rounded-full bg-gray-100 px-2 py-0.5 text-[9px] font-bold text-gray-600"
+                      className="rounded-full bg-secondary px-2 py-0.5 text-[0.6875rem] font-bold text-muted-foreground"
                     >
                       {p.method}: {formatCurrency(p.amount)} ({p.count})
                     </span>
@@ -329,9 +335,9 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
 
           {/* Close session form */}
           <div className="space-y-2 pt-1 border-t border-emerald-200">
-            <p className="text-[11px] font-bold text-gray-700">Close Session</p>
+            <p className="text-xs font-bold text-foreground">Close Session</p>
             {openSession?.queuedOffline && (
-              <p className="text-[10px] font-semibold text-amber-600">
+              <p className="text-[0.6875rem] font-semibold text-amber-600">
                 This session hasn't synced yet — it can be closed once it does.
               </p>
             )}
@@ -340,29 +346,48 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
               placeholder="Actual cash in drawer (₹)"
               value={actualCash}
               onChange={(e) => setActualCash(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
+              className="h-11 w-full rounded-control border border-input bg-card px-3 text-sm outline-none focus:border-primary"
             />
-            <input
-              type="text"
-              placeholder="Notes (optional)"
-              value={closeNotes}
-              onChange={(e) => setCloseNotes(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
-            />
+            {/* Variance sits ABOVE the note on purpose: whoever is closing has
+                to see that the drawer is short before being asked to explain
+                it. With the note first, the field read as boilerplate and got
+                left blank — which is exactly the blank that turns into a phone
+                call to the owner the next morning. */}
             {actualCash && liveExpectedCash > 0 && (
-              <div className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold ${
+              <div className={`flex items-center gap-1.5 rounded-control px-3 py-2 text-xs font-semibold ${
                 Number(actualCash) >= liveExpectedCash
-                  ? "bg-emerald-50 border border-emerald-200 text-emerald-700"
-                  : "bg-red-50 border border-red-200 text-red-700"
+                  ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border border-red-200 bg-red-50 text-red-700"
               }`}>
-                <AlertTriangle className="h-3 w-3 shrink-0" />
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
                 Expected {formatCurrency(liveExpectedCash)} · Difference: {formatCurrency(Number(actualCash) - liveExpectedCash)}
               </div>
+            )}
+            <input
+              type="text"
+              // The prompt changes with the situation rather than staying a
+              // generic "Notes (optional)" — a specific question gets a
+              // specific answer.
+              placeholder={
+                shortfall > 0
+                  ? `Why is the drawer ${formatCurrency(shortfall)} short?`
+                  : "Handover note for the next shift (optional)"
+              }
+              value={closeNotes}
+              onChange={(e) => setCloseNotes(e.target.value)}
+              className={`h-11 w-full rounded-control border bg-card px-3 text-sm outline-none focus:border-primary ${
+                shortfall > 0 && !closeNotes.trim() ? "border-warning/60" : "border-input"
+              }`}
+            />
+            {shortfall > 0 && !closeNotes.trim() && (
+              <p className="text-[0.6875rem] font-semibold text-warning">
+                Worth a line here — the owner sees this variance without the reason otherwise.
+              </p>
             )}
             <button
               onClick={() => setConfirmingClose(true)}
               disabled={!actualCash || closeLoading || !openSession?.id}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40"
+              className="flex w-full items-center justify-center gap-1.5 rounded-control bg-red-500 px-3 py-2.5 text-xs font-bold text-white disabled:opacity-40"
             >
               <Lock className="h-3 w-3" />
               {closeLoading ? "Closing..." : "Close Session"}
@@ -370,31 +395,31 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
           </div>
         </div>
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
+        <div className="rounded-control border border-border bg-white p-4 space-y-3">
           <div className="flex items-center gap-2">
-            <div className="h-2 w-2 rounded-full bg-gray-300" />
-            <p className="text-xs font-bold text-gray-500">No Open Session</p>
+            <div className="h-2 w-2 rounded-full bg-input" />
+            <p className="text-xs font-bold text-muted-foreground">No Open Session</p>
           </div>
-          <p className="text-[11px] text-gray-400">Open a session to start tracking counter cash for today.</p>
+          <p className="text-xs text-subtle-foreground">Open a session to start tracking counter cash for today.</p>
           <div className="space-y-2">
             <input
               type="number"
               placeholder="Opening cash amount (₹)"
               value={openingCash}
               onChange={(e) => setOpeningCash(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
+              className="h-11 w-full rounded-control border border-input bg-card px-3 text-sm outline-none focus:border-primary"
             />
             <input
               type="text"
               placeholder="Notes (optional)"
               value={openNotes}
               onChange={(e) => setOpenNotes(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs outline-none focus:border-red-400 focus:ring-1 focus:ring-red-100"
+              className="h-11 w-full rounded-control border border-input bg-card px-3 text-sm outline-none focus:border-primary"
             />
             <button
               onClick={handleOpen}
               disabled={!openingCash || openLoading}
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-red-500 px-3 py-2 text-xs font-bold text-white disabled:opacity-40"
+              className="flex h-12 w-full items-center justify-center gap-1.5 rounded-control bg-primary px-3 text-sm font-bold text-primary-foreground transition-colors hover:bg-red-600 disabled:opacity-40"
             >
               <LockOpen className="h-3 w-3" />
               {openLoading ? "Opening..." : "Open Session"}
@@ -406,28 +431,28 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
       {/* Recent sessions */}
       {sessions.length > 0 && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Recent Sessions</p>
+          <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Recent Sessions</p>
           <div className="space-y-1.5">
             {sessions.slice(0, 5).map((s) => {
               const diff = s.cashDifference ?? 0;
               return (
-                <div key={s.id} className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-3 py-2">
+                <div key={s.id} className="flex items-center justify-between rounded-control border border-border bg-white px-3 py-2">
                   <div>
-                    <p className="text-xs font-semibold text-gray-800">
+                    <p className="text-xs font-semibold text-foreground">
                       {new Date(s.businessDate).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
                     </p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[0.6875rem] text-subtle-foreground">
                       Open {formatCurrency(s.openingCash)} → Close {formatCurrency(s.closingCash)}
                     </p>
                   </div>
                   <div className="text-right">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[9px] font-bold ${
-                      s.status === "OPEN" ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-500"
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[0.6875rem] font-bold ${
+                      s.status === "OPEN" ? "bg-emerald-100 text-emerald-700" : "bg-secondary text-muted-foreground"
                     }`}>
                       {s.status}
                     </span>
                     {s.status === "CLOSED" && (
-                      <p className={`text-[10px] font-bold ${diff >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      <p className={`text-[0.6875rem] font-bold ${diff >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                         {diff >= 0 ? "+" : ""}{formatCurrency(diff)}
                       </p>
                     )}
@@ -449,14 +474,14 @@ ${data.notes ? `<div class="d"></div><div>Notes: ${data.notes}</div>` : ""}
         onCancel={() => setConfirmingClose(false)}
         confirmDisabled={closeLoading}
       >
-        <div className="mt-3 space-y-1 rounded-lg bg-gray-50 p-3">
+        <div className="mt-3 space-y-1 rounded-control bg-muted p-3">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Expected</span>
-            <span className="font-bold text-gray-800">{formatCurrency(liveExpectedCash)}</span>
+            <span className="text-muted-foreground">Expected</span>
+            <span className="font-bold text-foreground">{formatCurrency(liveExpectedCash)}</span>
           </div>
           <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Actual (entered)</span>
-            <span className="font-bold text-gray-800">{formatCurrency(Number(actualCash) || 0)}</span>
+            <span className="text-muted-foreground">Actual (entered)</span>
+            <span className="font-bold text-foreground">{formatCurrency(Number(actualCash) || 0)}</span>
           </div>
         </div>
       </ConfirmDialog>

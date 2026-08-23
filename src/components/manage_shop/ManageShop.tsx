@@ -16,9 +16,9 @@ export default function ManageShop() {
   const [tab, setTab] = useState("Attendance");
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-gray-50">
+    <div className="flex h-full flex-col overflow-hidden bg-muted">
       {/* TAB BAR */}
-      <div className="shrink-0 bg-white border-b border-gray-200 px-3 py-2">
+      <div className="shrink-0 bg-white border-b border-border px-3 py-2">
         <div className="flex items-center gap-1.5">
           {tabs.map((t) => {
             const Icon = t.icon;
@@ -30,7 +30,7 @@ export default function ManageShop() {
                 className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-bold transition-all ${
                   active
                     ? "border-red-500 bg-red-500 text-white shadow-sm"
-                    : "border-gray-200 bg-white text-gray-600 hover:border-red-200 hover:text-red-600"
+                    : "border-border bg-white text-muted-foreground hover:border-red-200 hover:text-red-600"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5 shrink-0" />

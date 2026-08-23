@@ -228,17 +228,17 @@ export default function Expense() {
   };
 
   return (
-    <div className="w-full h-dvh bg-gray-50 p-2">
-      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm h-[95dvh] flex flex-col overflow-hidden">
+    <div className="w-full h-dvh bg-muted p-2">
+      <div className="rounded-card border border-border bg-card shadow-sm h-[95dvh] flex flex-col overflow-hidden">
         {/* HEADER */}
-        <div className="p-5 border-b border-gray-100 shrink-0">
+        <div className="p-5 border-b border-border shrink-0">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-foreground">
                 Expense Details - {todayDate}
               </h1>
 
-              <p className="text-gray-500 mt-2 text-sm">
+              <p className="text-muted-foreground mt-2 text-sm">
                 Manage all shop expense transactions.
               </p>
             </div>
@@ -246,7 +246,7 @@ export default function Expense() {
             <div className="flex flex-col md:flex-row gap-3 w-full lg:w-auto">
               <div className="relative w-full md:w-[320px]">
                 <Search
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-subtle-foreground"
                   size={18}
                 />
 
@@ -255,13 +255,13 @@ export default function Expense() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search expense..."
-                  className="w-full h-11 rounded-xl border border-gray-200 pl-12 pr-4 outline-none focus:border-red-500"
+                  className="w-full h-11 rounded-control border border-border pl-12 pr-4 outline-none focus:border-red-500"
                 />
               </div>
 
               <button
                 onClick={handleAddExpense}
-                className="h-11 px-4 rounded-xl bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-2 transition-all"
+                className="h-11 px-4 rounded-control bg-red-500 hover:bg-red-600 text-white flex items-center justify-center gap-2 transition-all"
               >
                 <Plus size={18} />
                 Add Expense
@@ -279,7 +279,7 @@ export default function Expense() {
 
           {!loading && filteredExpenses.length === 0 && (
             <EmptyState
-              icon={<Search className="h-8 w-8 text-gray-300" />}
+              icon={<Search className="h-10 w-10 text-subtle-foreground" />}
               title={search ? "No expenses match your search" : "No expenses found"}
               className="py-10"
             />
@@ -294,7 +294,7 @@ export default function Expense() {
                   return (
                     <div
                       key={expense.id}
-                      className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm"
+                      className="rounded-card border border-border bg-card p-3 shadow-sm"
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0 flex-1">
@@ -303,19 +303,19 @@ export default function Expense() {
                               value={expense.title}
                               onChange={(e) => handleChange(expense.id, "title", e.target.value)}
                               placeholder="Title"
-                              className="w-full border rounded-lg px-2 py-1.5 text-sm font-bold outline-none focus:border-red-400"
+                              className="w-full border rounded-control min-h-10 px-2.5 py-1.5.5 text-sm font-bold outline-none focus:border-red-400"
                             />
                           ) : (
-                            <h3 className="truncate text-sm font-bold text-gray-900">{expense.title}</h3>
+                            <h3 className="truncate text-sm font-bold text-foreground">{expense.title}</h3>
                           )}
-                          <p className="mt-0.5 text-[11px] text-gray-400">{formatShortDate(expense.expenseDate)}</p>
+                          <p className="mt-0.5 text-xs text-subtle-foreground">{formatShortDate(expense.expenseDate)}</p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2.5">
                           {isEditing ? (
                             <button
                               onClick={() => handleSave(expense)}
                               aria-label="Save expense"
-                              className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-500 text-white"
+                              className="flex h-10 w-10 items-center justify-center rounded-control bg-green-500 text-white"
                             >
                               <Save size={16} />
                             </button>
@@ -325,7 +325,7 @@ export default function Expense() {
                               disabled={expense.queuedOffline}
                               aria-label="Edit expense"
                               title={expense.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
-                              className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="flex h-10 w-10 items-center justify-center rounded-control border border-input text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               <Pencil size={16} />
                             </button>
@@ -335,7 +335,7 @@ export default function Expense() {
                             disabled={expense.queuedOffline}
                             aria-label="Delete expense"
                             title={expense.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
-                            className="flex h-10 w-10 items-center justify-center rounded-xl border border-red-500 text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex h-10 w-10 items-center justify-center rounded-control border border-red-500 text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -343,32 +343,32 @@ export default function Expense() {
                       </div>
 
                       {isEditing ? (
-                        <div className="mt-2.5 space-y-2 border-t border-gray-100 pt-2.5">
+                        <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
                           <input
                             value={expense.description || ""}
                             onChange={(e) => handleChange(expense.id, "description", e.target.value)}
                             placeholder="Description"
-                            className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                            className="w-full border rounded-control min-h-10 px-2.5 py-1.5.5 text-xs outline-none focus:border-red-400"
                           />
                           <div className="grid grid-cols-2 gap-2">
                             <input
                               value={expense.expenseType || ""}
                               onChange={(e) => handleChange(expense.id, "expenseType", e.target.value)}
                               placeholder="Type"
-                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                              className="w-full border rounded-control min-h-10 px-2.5 py-1.5.5 text-xs outline-none focus:border-red-400"
                             />
                             <input
                               type="number"
                               value={expense.amount}
                               onChange={(e) => handleChange(expense.id, "amount", Number(e.target.value))}
                               placeholder="Amount"
-                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                              className="w-full border rounded-control min-h-10 px-2.5 py-1.5.5 text-xs outline-none focus:border-red-400"
                             />
                           </div>
                           <select
                             value={expense.paymentSource}
                             onChange={(e) => handleChange(expense.id, "paymentSource", e.target.value)}
-                            className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                            className="w-full border rounded-control min-h-10 px-2.5 py-1.5.5 text-xs outline-none focus:border-red-400"
                           >
                             {PAYMENT_SOURCES.map((source) => (
                               <option key={source.value} value={source.value}>{source.label}</option>
@@ -378,7 +378,7 @@ export default function Expense() {
                             <select
                               value={expense.paidByUserId || ""}
                               onChange={(e) => handleChange(expense.id, "paidByUserId", Number(e.target.value))}
-                              className="w-full border rounded-lg px-2 py-1.5 text-xs outline-none focus:border-red-400"
+                              className="w-full border rounded-control min-h-10 px-2.5 py-1.5.5 text-xs outline-none focus:border-red-400"
                             >
                               <option value="">Select Employee</option>
                               {users.map((u) => (
@@ -388,7 +388,7 @@ export default function Expense() {
                           )}
                         </div>
                       ) : (
-                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+                        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <StatusBadge
                               tone={
@@ -401,7 +401,7 @@ export default function Expense() {
                               {PAYMENT_SOURCES.find((s) => s.value === expense.paymentSource)?.label}
                             </StatusBadge>
                             {expense.expenseType && (
-                              <span className="rounded-lg bg-gray-100 px-2 py-1 text-[10px] font-bold text-gray-500">
+                              <span className="rounded-control bg-secondary min-h-10 px-2.5 py-1.5 text-[0.6875rem] font-bold text-muted-foreground">
                                 {expense.expenseType}
                               </span>
                             )}
@@ -415,10 +415,10 @@ export default function Expense() {
               </div>
 
               {/* DESKTOP TABLE */}
-              <div className="hidden xl:block w-full h-full overflow-y-scroll overflow-x-scroll rounded-xl border border-gray-100">
+              <div className="hidden xl:block w-full h-full overflow-y-scroll overflow-x-scroll rounded-control border border-border">
                 <table className="min-w-[1200px] w-full border-collapse text-sm">
                   <thead className="sticky top-0 bg-white z-10 shadow-sm">
-                    <tr className="bg-gray-50 text-left">
+                    <tr className="bg-muted text-left">
                       <th className="p-4 text-sm font-bold">Date</th>
 
                       <th className="p-4 text-sm font-bold">Title</th>
@@ -444,7 +444,7 @@ export default function Expense() {
                       return (
                         <tr
                           key={expense.id}
-                          className="border-b border-gray-100 hover:bg-gray-50 transition-all"
+                          className="border-b border-border hover:bg-muted transition-all"
                         >
                           <td className="p-4 text-sm whitespace-nowrap">
                             {formatShortDate(expense.expenseDate)}
@@ -457,7 +457,7 @@ export default function Expense() {
                                 onChange={(e) =>
                                   handleChange(expense.id, "title", e.target.value)
                                 }
-                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                className="border rounded-control min-h-10 px-2.5 py-1.5 w-full outline-none focus:border-red-400"
                               />
                             ) : (
                               expense.title
@@ -475,7 +475,7 @@ export default function Expense() {
                                     e.target.value,
                                   )
                                 }
-                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                className="border rounded-control min-h-10 px-2.5 py-1.5 w-full outline-none focus:border-red-400"
                               />
                             ) : (
                               expense.description || "-"
@@ -493,7 +493,7 @@ export default function Expense() {
                                     e.target.value,
                                   )
                                 }
-                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                className="border rounded-control min-h-10 px-2.5 py-1.5 w-full outline-none focus:border-red-400"
                               />
                             ) : (
                               expense.expenseType || "-"
@@ -511,7 +511,7 @@ export default function Expense() {
                                     e.target.value,
                                   )
                                 }
-                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                className="border rounded-control min-h-10 px-2.5 py-1.5 w-full outline-none focus:border-red-400"
                               >
                                 {PAYMENT_SOURCES.map((source) => (
                                   <option key={source.value} value={source.value}>
@@ -545,7 +545,7 @@ export default function Expense() {
                                       Number(e.target.value),
                                     )
                                   }
-                                  className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                  className="border rounded-control min-h-10 px-2.5 py-1.5 w-full outline-none focus:border-red-400"
                                 >
                                   <option value="">Select Employee</option>
 
@@ -577,7 +577,7 @@ export default function Expense() {
                                     Number(e.target.value),
                                   )
                                 }
-                                className="border rounded-lg px-2 py-1 w-full outline-none focus:border-red-400"
+                                className="border rounded-control min-h-10 px-2.5 py-1.5 w-full outline-none focus:border-red-400"
                               />
                             ) : (
                               formatCurrency(expense.amount)
@@ -589,7 +589,7 @@ export default function Expense() {
                                 <button
                                   onClick={() => handleSave(expense)}
                                   aria-label="Save expense"
-                                  className="h-9 px-3 rounded-xl bg-green-500 text-white flex items-center justify-center"
+                                  className="h-9 px-3 rounded-control bg-green-500 text-white flex items-center justify-center"
                                 >
                                   <Save size={16} />
                                 </button>
@@ -599,7 +599,7 @@ export default function Expense() {
                                   disabled={expense.queuedOffline}
                                   aria-label="Edit expense"
                                   title={expense.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
-                                  className="h-9 px-3 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-100 transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="h-9 px-3 rounded-control border border-input text-muted-foreground hover:bg-secondary transition-all disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <Pencil size={16} />
                                 </button>
@@ -610,7 +610,7 @@ export default function Expense() {
                                 disabled={expense.queuedOffline}
                                 aria-label="Delete expense"
                                 title={expense.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
-                                className="h-9 px-3 rounded-xl border border-red-500 text-red-700 hover:bg-red-500 hover:text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                                className="h-9 px-3 rounded-control border border-red-500 text-red-700 hover:bg-red-500 hover:text-white transition-all disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 <Trash2 size={16} />
                               </button>

@@ -17,8 +17,8 @@ export function EmptyState({ icon, title, description, className }: EmptyStatePr
   return (
     <div className={cn("flex flex-col items-center justify-center gap-1.5 py-10 text-center", className)}>
       {icon}
-      <p className="text-sm font-bold text-gray-700">{title}</p>
-      {description && <p className="text-xs text-gray-400">{description}</p>}
+      <p className="text-sm font-bold text-foreground">{title}</p>
+      {description && <p className="text-xs text-subtle-foreground">{description}</p>}
     </div>
   );
 }

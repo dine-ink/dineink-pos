@@ -85,15 +85,15 @@ export default function Attendance() {
 
   return (
     <div className="w-full h-full p-2">
-      <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-sm">
+      <div className="rounded-card border border-border bg-card p-5 shadow-sm">
         {/* HEADER */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <h1 className="text-2xl font-bold text-foreground">
               Attendance - {todayDate}
             </h1>
 
-            <p className="text-gray-500 mt-2 text-sm">
+            <p className="text-muted-foreground mt-2 text-sm">
               Manage employee attendance and working hours.
             </p>
           </div>
@@ -101,7 +101,7 @@ export default function Attendance() {
           {/* SEARCH */}
           <div className="relative w-full md:w-[320px]">
             <Search
-              className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-subtle-foreground"
               size={18}
             />
 
@@ -110,7 +110,7 @@ export default function Attendance() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by name..."
-              className="w-full h-11 rounded-xl border border-gray-200 pl-12 pr-4 outline-none hover:border-red-500 focus:border-red-500"
+              className="w-full h-11 rounded-control border border-border pl-12 pr-4 outline-none hover:border-red-500 focus:border-red-500"
             />
           </div>
         </div>
@@ -136,15 +136,15 @@ export default function Attendance() {
               {filteredEmployees.map((employee) => (
                 <div
                   key={employee.id}
-                  className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm"
+                  className="rounded-card border border-border bg-card p-3 shadow-sm"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <h2 className="text-sm font-bold text-gray-900">{employee.name}</h2>
+                    <h2 className="text-sm font-bold text-foreground">{employee.name}</h2>
                     <button
                       onClick={() => handleToggleLogin(employee)}
                       disabled={employee.queuedOffline}
                       title={employee.queuedOffline ? "Waiting to sync before this can change again" : undefined}
-                      className={`shrink-0 rounded-lg px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                      className={`shrink-0 rounded-control px-4 py-2.5 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                         employee.status
                           ? "bg-red-100 text-red-600"
                           : "bg-green-100 text-green-700"
@@ -153,22 +153,22 @@ export default function Attendance() {
                       ● {employee.status ? "Logout" : "Login"}
                     </button>
                   </div>
-                  <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-gray-100 pt-2.5">
+                  <div className="mt-2.5 grid grid-cols-3 gap-2 border-t border-border pt-2.5">
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Login</p>
-                      <p className="text-xs font-semibold text-gray-700">
+                      <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-subtle-foreground">Login</p>
+                      <p className="text-xs font-semibold text-foreground">
                         {employee.loginTime ? formatTime(employee.loginTime) : "-"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Logout</p>
-                      <p className="text-xs font-semibold text-gray-700">
+                      <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-subtle-foreground">Logout</p>
+                      <p className="text-xs font-semibold text-foreground">
                         {employee.logoutTime ? formatTime(employee.logoutTime) : "-"}
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Total</p>
-                      <p className="text-xs font-semibold text-gray-700">
+                      <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-subtle-foreground">Total</p>
+                      <p className="text-xs font-semibold text-foreground">
                         {employee.totalHours ? `${employee.totalHours} hrs` : "-"}
                       </p>
                     </div>
@@ -178,11 +178,11 @@ export default function Attendance() {
             </div>
 
             {/* DESKTOP TABLE */}
-            <div className="hidden xl:block overflow-auto max-h-[500px] rounded-xl border border-gray-100">
+            <div className="hidden xl:block overflow-auto max-h-[500px] rounded-control border border-border">
               <table className="w-full border-collapse min-w-[1100px]">
                 {/* TABLE HEAD */}
                 <thead className="sticky top-0 bg-white z-10">
-                  <tr className="bg-gray-50 text-left">
+                  <tr className="bg-muted text-left">
                     <th className="p-4 text-sm font-bold">Name</th>
 
                     <th className="p-4 text-sm font-bold">Login / Logout</th>
@@ -200,11 +200,11 @@ export default function Attendance() {
                   {filteredEmployees.map((employee) => (
                     <tr
                       key={employee.id}
-                      className="border-b border-gray-100 hover:bg-gray-50 transition-all"
+                      className="border-b border-border hover:bg-muted transition-all"
                     >
                       {/* NAME */}
                       <td className="p-4">
-                        <h2 className="text-gray-900 text-sm">
+                        <h2 className="text-foreground text-sm">
                           {employee.name}
                         </h2>
                       </td>
@@ -215,7 +215,7 @@ export default function Attendance() {
                           onClick={() => handleToggleLogin(employee)}
                           disabled={employee.queuedOffline}
                           title={employee.queuedOffline ? "Waiting to sync before this can change again" : undefined}
-                          className={`px-4 py-2 rounded-lg text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                          className={`px-4 py-2 rounded-control text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                             employee.status
                               ? "bg-red-100 text-red-600"
                               : "bg-green-100 text-green-700"
@@ -226,17 +226,17 @@ export default function Attendance() {
                       </td>
 
                       {/* LOGIN TIME */}
-                      <td className="p-4 text-gray-900 text-sm">
+                      <td className="p-4 text-foreground text-sm">
                         {employee.loginTime ? formatTime(employee.loginTime) : "-"}
                       </td>
 
                       {/* LOGOUT TIME */}
-                      <td className="p-4 text-gray-900 text-sm">
+                      <td className="p-4 text-foreground text-sm">
                         {employee.logoutTime ? formatTime(employee.logoutTime) : "-"}
                       </td>
 
                       {/* TOTAL TIME */}
-                      <td className="p-4 text-gray-900 text-sm">
+                      <td className="p-4 text-foreground text-sm">
                         {employee.totalHours ? `${employee.totalHours} hrs` : "-"}
                       </td>
                     </tr>

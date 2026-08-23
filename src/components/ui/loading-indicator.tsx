@@ -3,8 +3,8 @@ import { cn } from "@/lib/utils";
 type LoadingIndicatorVariant = "page" | "section" | "button";
 
 const RING_CLASSES: Record<LoadingIndicatorVariant, string> = {
-  page: "h-8 w-8 border-[3px] border-gray-200 border-t-red-500",
-  section: "h-5 w-5 border-2 border-gray-200 border-t-red-500",
+  page: "h-8 w-8 border-[3px] border-border border-t-red-500",
+  section: "h-5 w-5 border-2 border-border border-t-red-500",
   button: "h-3.5 w-3.5 border-2 border-white/30 border-t-white",
 };
 
@@ -28,7 +28,7 @@ export function LoadingIndicator({ variant = "page", label, className }: Loading
         <p
           className={cn(
             "font-semibold",
-            variant === "button" ? "text-xs text-white" : "text-xs text-gray-400",
+            variant === "button" ? "text-xs text-white" : "text-xs text-subtle-foreground",
           )}
         >
           {label}

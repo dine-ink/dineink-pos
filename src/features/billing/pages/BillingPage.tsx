@@ -90,9 +90,9 @@ export default function BillingPage() {
   }, [branchData]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-gray-50">
-      <div className="shrink-0 flex items-center border-b border-gray-200 bg-white shadow-sm pr-2">
-        <div className="flex-1 min-w-0">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
+      <div className="flex shrink-0 items-center border-b border-border bg-card pr-2">
+        <div className="min-w-0 flex-1">
           <BillingTypeTabs
             billingType={billingType}
             setBillingType={setBillingType}
@@ -103,13 +103,14 @@ export default function BillingPage() {
         <button
           onClick={() => setPrinterModalOpen(true)}
           title="Printer setup"
-          className={`ml-1 shrink-0 flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition ${
+          aria-label={hasPrinter ? "Printer connected — open printer setup" : "No printer — open printer setup"}
+          className={`ml-1 flex h-10 shrink-0 items-center gap-1.5 rounded-control border px-3 text-xs font-bold transition-colors ${
             hasPrinter
-              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-              : "border-gray-200 bg-white text-gray-500 hover:border-red-200 hover:text-red-600"
+              ? "border-success/30 bg-success-muted text-success"
+              : "border-border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
           }`}
         >
-          <Printer className="h-3.5 w-3.5" />
+          <Printer className="h-4 w-4" />
           <span className="hidden sm:inline">{hasPrinter ? "Printer" : "No Printer"}</span>
         </button>
       </div>

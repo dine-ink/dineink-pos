@@ -45,12 +45,12 @@ function AddOnSelectorModal({ itemName, groups, onConfirm, onCancel }: Props) {
       >
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h3 className="text-[16px] font-bold text-gray-900">Add-Ons</h3>
-            <p className="mt-0.5 text-[11px] text-gray-500">{itemName}</p>
+            <h3 className="text-[16px] font-bold text-foreground">Add-Ons</h3>
+            <p className="mt-0.5 text-xs text-muted-foreground">{itemName}</p>
           </div>
           <button
             onClick={onCancel}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"
+            className="flex h-7 w-7 items-center justify-center rounded-lg border border-border text-muted-foreground hover:bg-muted"
           >
             <X className="h-4 w-4" />
           </button>
@@ -59,7 +59,7 @@ function AddOnSelectorModal({ itemName, groups, onConfirm, onCancel }: Props) {
         <div className="max-h-80 space-y-3 overflow-y-auto">
           {groups.map((group) => (
             <div key={group.id}>
-              <p className="mb-1.5 text-[10px] font-black uppercase tracking-wide text-gray-400">
+              <p className="mb-1.5 text-[0.6875rem] font-black uppercase tracking-wide text-subtle-foreground">
                 {group.name}
               </p>
               <div className="space-y-1.5">
@@ -70,18 +70,18 @@ function AddOnSelectorModal({ itemName, groups, onConfirm, onCancel }: Props) {
                       key={opt.id}
                       onClick={() => toggle(opt.id)}
                       className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition ${
-                        checked ? "border-red-300 bg-red-50" : "border-gray-200 bg-white hover:bg-gray-50"
+                        checked ? "border-red-300 bg-red-50" : "border-border bg-white hover:bg-muted"
                       }`}
                     >
                       <span className="flex items-center gap-2">
                         <span
                           className={`flex h-4 w-4 items-center justify-center rounded border-2 ${
-                            checked ? "border-red-500 bg-red-500" : "border-gray-300"
+                            checked ? "border-red-500 bg-red-500" : "border-input"
                           }`}
                         >
                           {checked && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
                         </span>
-                        <span className="text-[13px] font-semibold text-gray-900">{opt.name}</span>
+                        <span className="text-[13px] font-semibold text-foreground">{opt.name}</span>
                       </span>
                       <span className="text-[12px] font-bold text-red-600">+₹{opt.price}</span>
                     </button>
@@ -95,7 +95,7 @@ function AddOnSelectorModal({ itemName, groups, onConfirm, onCancel }: Props) {
         <div className="mt-4 flex gap-2">
           <button
             onClick={onCancel}
-            className="flex-1 rounded-xl border border-gray-200 px-4 py-2 text-[13px] font-semibold text-gray-600 hover:bg-gray-50"
+            className="flex-1 rounded-xl border border-border px-4 py-2 text-[13px] font-semibold text-muted-foreground hover:bg-muted"
           >
             Skip
           </button>

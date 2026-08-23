@@ -5,12 +5,15 @@ import toast from "react-hot-toast";
 import { logout, setAuth } from "@/store/slices/authSlice";
 import { useAppSelector } from "@/store/hooks";
 import { Menu, MenuButton, MenuItem, MenuItems } from "@headlessui/react";
-import { Receipt, ClipboardList, Wifi, WifiOff, Store, Bell, LogOut, User, ChefHat, CheckCircle } from "lucide-react";
+import { WifiOff, Bell, LogOut, User, CheckCircle } from "lucide-react";
 import { getAllRunningOrders, updateRunningOrderStatus } from "@/services/runningOrderService";
 import { getMyProfile } from "@/services/authService";
 import { useOnlineStatus } from "@/hooks/useOnlineStatus";
 import { usePolling } from "@/hooks/usePolling";
 import { flushQueue, getQueueCount } from "@/utils/offlineQueue";
+import { navFor, isKitchenDevice } from "@/config/navigation";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export default function MainLayout() {
   const location = useLocation();
@@ -23,26 +26,10 @@ export default function MainLayout() {
   const isOnline = useOnlineStatus();
   const [pendingSyncCount, setPendingSyncCount] = useState(getQueueCount());
 
-  const isKitchen = user?.department === "KITCHEN";
-  const role = user?.role;
-
-  const navItems = isKitchen
-    ? [{ name: "Kitchen", href: "/app/kitchen", icon: ChefHat }]
-    : role === "MANAGER"
-      ? [
-          { name: "Billing", href: "/app/billing", icon: Receipt },
-          { name: "Orders", href: "/app/orders", icon: ClipboardList },
-          { name: "Online", href: "/app/online-orders", icon: Wifi },
-          { name: "Kitchen", href: "/app/kitchen", icon: ChefHat },
-          { name: "Shop", href: "/app/manage-shop", icon: Store },
-        ]
-      : role === "CASHIER"
-        ? [
-            { name: "Billing", href: "/app/billing", icon: Receipt },
-            { name: "Orders", href: "/app/orders", icon: ClipboardList },
-            { name: "Online", href: "/app/online-orders", icon: Wifi },
-          ]
-        : [{ name: "Billing", href: "/app/billing", icon: Receipt }];
+  const isKitchen = isKitchenDevice(user);
+  // Nav and route guards both read config/navigation.ts, so a visible tab is
+  // always one this session can actually open.
+  const navItems = navFor(user);
 
   // Poll READY orders for notification bell — non-kitchen users only
   const fetchReadyOrders = async () => {
@@ -150,152 +137,166 @@ export default function MainLayout() {
   };
 
   const initial = user?.name?.[0]?.toUpperCase() || "U";
+  // A nav entry is active for its own path and anything nested under it, so
+  // /app/shop/stock keeps the Shop tab lit.
+  const isActive = (path: string) =>
+    location.pathname === `/app/${path}` || location.pathname.startsWith(`/app/${path}/`);
 
   return (
-    <div className="flex h-dvh flex-col bg-gray-50">
-      {/* ===== TOP NAVBAR ===== */}
-      <header className="shrink-0 z-50 bg-gradient-to-r from-red-600 via-red-500 to-rose-500 shadow-md">
-        <div className="flex h-12 items-center justify-between px-3">
+    <div className="flex h-dvh flex-col bg-background">
+      {/* ═══ TOP BAR ═══ */}
+      <header className="shrink-0 z-40 bg-primary pad-safe-top shadow-sm">
+        <div className="flex h-14 items-center justify-between gap-2 px-3 sm:px-4">
           {/* BRAND */}
-          <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-white/20 ring-1 ring-white/30">
-              <span className="text-xs font-black text-white">D</span>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/20 ring-1 ring-white/25">
+              <span className="text-sm font-bold text-white">D</span>
             </div>
-            <div>
-              <h1 className="text-sm font-black leading-none tracking-tight">
+            <div className="hidden sm:block">
+              <p className="text-sm leading-none font-bold tracking-tight">
                 <span className="text-white">Dine</span>
                 <span className="text-red-200">Ink</span>
-              </h1>
-              <p className="text-[7px] font-bold uppercase tracking-widest text-red-100/70 leading-none">POS</p>
+              </p>
+              <p className="mt-0.5 text-[0.5625rem] leading-none font-bold tracking-[0.15em] text-white/60 uppercase">
+                {user?.branch?.name || "POS"}
+              </p>
             </div>
           </div>
 
-          {/* DESKTOP NAV LINKS */}
-          <nav className="hidden md:flex items-center gap-0.5">
+          {/* NAV — tablet and desktop. Phones use the bottom bar instead. */}
+          <nav className="hidden min-w-0 flex-1 items-center justify-center gap-1 md:flex">
             {navItems.map((item) => {
-              const active = location.pathname === item.href;
+              const active = isActive(item.path);
               const Icon = item.icon;
               return (
-                <Link key={item.name} to={item.href}
-                  className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition-all ${
-                    active ? "bg-white text-red-600 shadow-sm" : "text-red-50/90 hover:bg-white/15 hover:text-white"
-                  }`}>
-                  <Icon className="h-3 w-3" />
-                  {item.name}
+                <Link
+                  key={item.path}
+                  to={`/app/${item.path}`}
+                  className={cn(
+                    "flex h-10 items-center gap-1.5 rounded-control px-3 text-[0.8125rem] font-semibold transition-colors",
+                    active ? "bg-white text-primary shadow-sm" : "text-white/85 hover:bg-white/15 hover:text-white",
+                  )}
+                >
+                  <Icon className="h-4 w-4" />
+                  {item.label}
                 </Link>
               );
             })}
           </nav>
 
           {/* RIGHT ACTIONS */}
-          <div className="flex items-center gap-1.5">
-            {/* CONNECTIVITY INDICATOR — visible at every size (was xl:-only,
-                so phones/tablets had zero online/syncing feedback); label
-                text only shows once there's room from sm: up. */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            {/* CONNECTIVITY */}
             {isOnline ? (
               pendingSyncCount > 0 ? (
-                <div className="flex items-center gap-1 rounded-lg bg-amber-400/20 px-2 py-1">
-                  <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300" />
-                  <span className="hidden sm:inline text-[9px] font-bold tracking-widest text-white uppercase">
+                <div className="flex h-9 items-center gap-1.5 rounded-control bg-amber-400/25 px-2.5">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-amber-200" />
+                  <span className="hidden text-[0.625rem] font-bold tracking-wider text-white uppercase sm:inline">
                     Syncing {pendingSyncCount}
                   </span>
+                  <span className="text-[0.625rem] font-bold text-white tnum sm:hidden">{pendingSyncCount}</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-1 rounded-lg bg-white/10 px-2 py-1">
-                  <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                  <span className="hidden sm:inline text-[9px] font-bold tracking-widest text-white uppercase">Live</span>
+                <div className="flex h-9 items-center gap-1.5 rounded-control bg-white/12 px-2.5">
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
+                  <span className="hidden text-[0.625rem] font-bold tracking-wider text-white uppercase sm:inline">
+                    Live
+                  </span>
                 </div>
               )
             ) : (
-              <div className="flex items-center gap-1 rounded-lg bg-black/20 px-2 py-1">
-                <WifiOff className="h-3 w-3 text-white" />
-                <span className="text-[9px] font-bold tracking-widest text-white uppercase">
+              <div className="flex h-9 items-center gap-1.5 rounded-control bg-black/25 px-2.5">
+                <WifiOff className="h-3.5 w-3.5 text-white" />
+                <span className="text-[0.625rem] font-bold tracking-wider text-white uppercase">
                   Offline{pendingSyncCount > 0 ? ` · ${pendingSyncCount}` : ""}
                 </span>
               </div>
             )}
 
-            {/* NOTIFICATION BELL */}
-            <div ref={notifRef} className="relative">
-              <button
-                onClick={() => setShowNotifications((v) => !v)}
-                aria-label="Notifications"
-                className="relative flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-white transition hover:bg-white/25"
-              >
-                <Bell className="h-3.5 w-3.5" />
-                {readyOrders.length > 0 ? (
-                  <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-blue-500 text-[8px] font-black text-white ring-1 ring-red-500 animate-pulse">
-                    {readyOrders.length}
-                  </span>
-                ) : (
-                  <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-emerald-400 ring-1 ring-red-500" />
-                )}
-              </button>
+            {/* NOTIFICATIONS — ready orders to run to a table */}
+            {!isKitchen && (
+              <div ref={notifRef} className="relative">
+                <button
+                  onClick={() => setShowNotifications((v) => !v)}
+                  aria-label={`Notifications${readyOrders.length ? ` (${readyOrders.length} ready)` : ""}`}
+                  className="relative flex h-10 w-10 items-center justify-center rounded-control bg-white/15 text-white transition-colors hover:bg-white/25"
+                >
+                  <Bell className="h-4 w-4" />
+                  {readyOrders.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[0.625rem] font-bold text-primary tnum ring-2 ring-primary">
+                      {readyOrders.length}
+                    </span>
+                  )}
+                </button>
 
-              {/* NOTIFICATION DROPDOWN */}
-              {showNotifications && (
-                <div className="absolute right-0 mt-1.5 w-64 rounded-xl border border-gray-100 bg-white shadow-xl z-50 overflow-hidden">
-                  <div className="border-b border-gray-100 px-3 py-2 flex items-center justify-between">
-                    <p className="text-xs font-black text-gray-900">Notifications</p>
-                    {readyOrders.length > 0 && (
-                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[9px] font-black text-blue-700">
-                        {readyOrders.length} ready
-                      </span>
-                    )}
-                  </div>
-                  <div className="max-h-72 overflow-y-auto p-2 space-y-1.5">
-                    {readyOrders.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-6 text-center">
-                        <CheckCircle className="h-6 w-6 text-gray-200" />
-                        <p className="mt-2 text-xs font-semibold text-gray-400">All orders delivered</p>
-                      </div>
-                    ) : (
-                      readyOrders.map((order) => (
-                        <div key={order.id} className="flex items-center justify-between rounded-lg border border-blue-100 bg-blue-50 px-2.5 py-2">
-                          <div>
-                            <p className="text-xs font-black text-gray-900">
-                              {order.tableName ?? (order.tableId ? `Table ${order.tableId}` : "Takeaway")}
-                            </p>
-                            <p className="text-[10px] text-blue-600 font-semibold">Ready to serve</p>
-                            {order.orderNo && (
-                              <p className="text-[9px] text-gray-400">#{order.orderNo}</p>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => handleDeliverOrder(order)}
-                            className="ml-2 shrink-0 rounded-lg bg-blue-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-blue-600 active:scale-95"
-                          >
-                            Delivered
-                          </button>
+                {showNotifications && (
+                  <div className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-card border border-border bg-card shadow-xl">
+                    <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+                      <p className="text-sm font-bold text-foreground">Ready to serve</p>
+                      {readyOrders.length > 0 && (
+                        <span className="rounded-full bg-info-muted px-2 py-0.5 text-[0.625rem] font-bold text-info tnum">
+                          {readyOrders.length}
+                        </span>
+                      )}
+                    </div>
+                    <div className="max-h-[60dvh] space-y-1.5 overflow-y-auto p-2">
+                      {readyOrders.length === 0 ? (
+                        <div className="flex flex-col items-center py-8 text-center">
+                          <CheckCircle className="h-7 w-7 text-border" />
+                          <p className="mt-2 text-xs font-semibold text-muted-foreground">All orders delivered</p>
                         </div>
-                      ))
-                    )}
+                      ) : (
+                        readyOrders.map((order) => (
+                          <div
+                            key={order.id}
+                            className="flex items-center justify-between gap-2 rounded-control border border-info/25 bg-info-muted px-2.5 py-2"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-bold text-foreground">
+                                {order.tableName ?? (order.tableId ? `Table ${order.tableId}` : "Takeaway")}
+                              </p>
+                              {order.orderNo && (
+                                <p className="text-[0.625rem] text-muted-foreground">#{order.orderNo}</p>
+                              )}
+                            </div>
+                            <Button size="xs" onClick={() => handleDeliverOrder(order)}>
+                              Delivered
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
             {/* PROFILE */}
             <Menu as="div" className="relative">
-              <MenuButton className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 text-white transition hover:bg-white/30 ring-1 ring-white/20">
-                <span className="text-xs font-black">{initial}</span>
+              <MenuButton className="flex h-10 w-10 items-center justify-center rounded-control bg-white/20 text-white ring-1 ring-white/20 transition-colors hover:bg-white/30">
+                <span className="text-sm font-bold">{initial}</span>
               </MenuButton>
-              <MenuItems className="absolute right-0 mt-1.5 w-44 rounded-xl border border-gray-100 bg-white p-1 shadow-xl outline-none z-50">
-                <div className="flex items-center gap-2 px-2 py-2 mb-0.5">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600">
-                    <User className="h-3.5 w-3.5" />
+              <MenuItems className="absolute right-0 z-50 mt-2 w-52 rounded-card border border-border bg-card p-1.5 shadow-xl outline-none">
+                <div className="flex items-center gap-2.5 px-2 py-2">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-red-50 text-primary">
+                    <User className="h-4 w-4" />
                   </div>
-                  <div>
-                    <p className="text-xs font-bold text-gray-900 leading-tight">{user?.name || "Staff"}</p>
-                    <p className="text-[10px] text-gray-500 capitalize leading-tight">{user?.role || "Cashier"}</p>
+                  <div className="min-w-0">
+                    <p className="truncate text-sm leading-tight font-bold text-foreground">{user?.name || "Staff"}</p>
+                    <p className="text-xs leading-tight text-muted-foreground capitalize">
+                      {(user?.role || "cashier").toLowerCase()}
+                      {isKitchen ? " · kitchen" : ""}
+                    </p>
                   </div>
                 </div>
-                <div className="h-px bg-gray-100 mb-0.5" />
+                <div className="my-1 h-px bg-border" />
                 <MenuItem>
-                  <button onClick={handleLogout}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50">
-                    <LogOut className="h-3.5 w-3.5" />
-                    Sign Out
+                  <button
+                    onClick={handleLogout}
+                    className="flex h-11 w-full items-center gap-2 rounded-control px-2 text-sm font-semibold text-destructive transition-colors hover:bg-destructive/10"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign out
                   </button>
                 </MenuItem>
               </MenuItems>
@@ -304,32 +305,50 @@ export default function MainLayout() {
         </div>
       </header>
 
-      {/* ===== PAGE CONTENT ===== */}
-      <main className="flex-1 min-h-0 overflow-hidden">
+      {/* ═══ PAGE ═══ */}
+      <main className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
       </main>
 
-      {/* ===== MOBILE BOTTOM TAB BAR ===== */}
-      <nav className="shrink-0 md:hidden border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)]">
-        <div className="flex">
-          {navItems.map((item) => {
-            const active = location.pathname === item.href;
-            const Icon = item.icon;
-            return (
-              <Link key={item.name} to={item.href}
-                className="flex flex-1 flex-col items-center justify-center gap-0.5 py-1.5">
-                <div className={`flex h-7 w-8 items-center justify-center rounded-lg transition-all ${active ? "bg-red-50" : ""}`}>
-                  <Icon className={`h-[18px] w-[18px] transition-colors ${active ? "text-red-600" : "text-gray-400"}`}
-                    strokeWidth={active ? 2.5 : 2} />
-                </div>
-                <span className={`text-[9px] font-bold leading-none ${active ? "text-red-600" : "text-gray-400"}`}>
-                  {item.name}
-                </span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+      {/* ═══ BOTTOM TABS — phone only ═══ */}
+      {navItems.length > 1 && (
+        <nav className="shrink-0 border-t border-border bg-card pad-safe-bottom md:hidden">
+          <div className="flex">
+            {navItems.map((item) => {
+              const active = isActive(item.path);
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  to={`/app/${item.path}`}
+                  aria-current={active ? "page" : undefined}
+                  className="flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 py-1.5"
+                >
+                  <span
+                    className={cn(
+                      "flex h-7 w-9 items-center justify-center rounded-lg transition-colors",
+                      active && "bg-red-50",
+                    )}
+                  >
+                    <Icon
+                      className={cn("h-[1.125rem] w-[1.125rem]", active ? "text-primary" : "text-subtle-foreground")}
+                      strokeWidth={active ? 2.5 : 2}
+                    />
+                  </span>
+                  <span
+                    className={cn(
+                      "text-[0.625rem] leading-none font-bold",
+                      active ? "text-primary" : "text-subtle-foreground",
+                    )}
+                  >
+                    {item.shortLabel ?? item.label}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </div>
   );
 }

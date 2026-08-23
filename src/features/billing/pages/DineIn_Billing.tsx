@@ -10,6 +10,7 @@ import {
   transferTable,
 } from "@/services/runningOrderService";
 import MenuSection from "@/components/billing/MenuSection";
+import { useKitchenQueue } from "@/hooks/useKitchenQueue";
 import CustomerSection from "@/components/billing/CustomerSection";
 import AddOnSelectorModal from "@/components/billing/AddOnSelectorModal";
 import {
@@ -207,6 +208,19 @@ export default function DineIn({
     () => cartItems.reduce((acc, item) => acc + lineTotalFor(item), 0),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cartItems, cartAddOns, cart],
+  );
+
+  // Live kitchen wait — lets a captain at the table quote a time, and see that
+  // (say) the tandoor is backed up while the fryer is clear. Advisory only:
+  // nothing here blocks or changes an order.
+  const { estimate, targetTicketMinutes } = useKitchenQueue();
+  const cartLines = useMemo(
+    () => cartItems.map((i: any) => ({ menuItemId: i.id, qty: cart[i.id] })),
+    [cartItems, cart],
+  );
+  const etaFor = useCallback(
+    (menuItemId: number) => estimate(menuItemId, 1, cartLines),
+    [estimate, cartLines],
   );
 
   // Load all KOTs for this table — cart stays empty (new order starts fresh)
@@ -792,38 +806,38 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
     <div className="flex h-full flex-col overflow-hidden">
       {/* ===== TABLE SELECTION VIEW ===== */}
       {!selectedTable && (
-        <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm">
           {/* TOP BAR */}
-          <div className="shrink-0 border-b border-gray-100 px-3 py-2">
+          <div className="shrink-0 border-b border-border px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <div>
-                <h2 className="text-sm font-black tracking-tight text-gray-900">
+                <h2 className="text-sm font-black tracking-tight text-foreground">
                   Restaurant Floor
                 </h2>
-                <p className="text-[10px] text-gray-500">
+                <p className="text-[0.6875rem] text-muted-foreground">
                   Select a table to begin
                 </p>
               </div>
               <div className="flex items-center gap-1.5">
                 {/* STATUS BADGES */}
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700">
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[0.6875rem] font-black text-emerald-700">
                   {availableCount} Avail
                 </span>
                 {inKitchenCount > 0 && (
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-black text-amber-700">
+                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[0.6875rem] font-black text-amber-700">
                     {inKitchenCount} Kitchen
                   </span>
                 )}
                 {readyToServeCount > 0 && (
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-black text-blue-700 animate-pulse">
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[0.6875rem] font-black text-blue-700 animate-pulse">
                     {readyToServeCount} Ready
                   </span>
                 )}
-                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-black text-red-700">
+                <span className="rounded-full bg-red-50 px-2 py-0.5 text-[0.6875rem] font-black text-red-700">
                   {occupiedCount} Occ
                 </span>
                 {tempCount > 0 && (
-                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-black text-purple-700">
+                  <span className="rounded-full bg-purple-50 px-2 py-0.5 text-[0.6875rem] font-black text-purple-700">
                     {tempCount} Temp
                   </span>
                 )}
@@ -834,7 +848,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       setShowModifyTables(true);
                       setFloorAction("HOME");
                     }}
-                    className="flex items-center gap-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-red-600 active:scale-95"
+                    className="flex items-center gap-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-red-600 active:scale-95"
                   >
                     <Settings className="h-3 w-3" />
                     Floor
@@ -921,7 +935,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               {isMerge ? "Merge" : "Split"}
                             </div>
                           )}
-                          <h3 className="text-lg font-black tracking-tight text-gray-900">
+                          <h3 className="text-lg font-black tracking-tight text-foreground">
                             {table.name}
                           </h3>
                         </div>
@@ -936,10 +950,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           {label}
                         </span>
                         <div className="text-right">
-                          <p className="text-xs font-black text-gray-900">
+                          <p className="text-xs font-black text-foreground">
                             {table.capacity}
                           </p>
-                          <p className="text-[7px] font-bold uppercase text-gray-400">
+                          <p className="text-[7px] font-bold uppercase text-subtle-foreground">
                             seats
                           </p>
                         </div>
@@ -951,19 +965,19 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
             </div>
 
             {/* DESKTOP LIVE OPS PANEL */}
-            <div className="hidden xl:flex xl:w-[220px] shrink-0 flex-col border-l border-gray-100 overflow-y-auto">
-              <div className="p-3 border-b border-gray-100">
-                <h3 className="text-xs font-black text-gray-900">
+            <div className="hidden xl:flex xl:w-[220px] shrink-0 flex-col border-l border-border overflow-y-auto">
+              <div className="p-3 border-b border-border">
+                <h3 className="text-xs font-black text-foreground">
                   Live Operations
                 </h3>
-                <p className="text-[10px] text-gray-500 mt-0.5">
+                <p className="text-[0.6875rem] text-muted-foreground mt-0.5">
                   Floor activity
                 </p>
               </div>
               <div className="p-3 space-y-3">
                 {/* OCCUPANCY */}
                 <div className="rounded-xl bg-gradient-to-br from-red-500 to-red-600 p-3 text-white">
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">
+                  <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-red-100">
                     Occupancy
                   </p>
                   <h2 className="mt-1 text-3xl font-black">
@@ -972,7 +986,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       : 0}
                     %
                   </h2>
-                  <p className="text-[10px] text-red-100 mt-0.5">
+                  <p className="text-[0.6875rem] text-red-100 mt-0.5">
                     {occupiedCount} of {nonTempTables.length} tables
                   </p>
                 </div>
@@ -980,10 +994,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {/* ACTIVE TABLES */}
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <h4 className="text-xs font-black text-gray-900">
+                    <h4 className="text-xs font-black text-foreground">
                       Active Tables
                     </h4>
-                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-black text-red-700">
+                    <span className="rounded-full bg-red-100 px-2 py-0.5 text-[0.6875rem] font-black text-red-700">
                       {occupiedCount}
                     </span>
                   </div>
@@ -996,19 +1010,19 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           className="rounded-xl border border-red-100 bg-red-50 px-2.5 py-2"
                         >
                           <div className="flex items-center justify-between">
-                            <h5 className="text-xs font-black text-gray-900">
+                            <h5 className="text-xs font-black text-foreground">
                               {table.name}
                             </h5>
-                            <span className="text-[10px] font-bold text-red-600">
+                            <span className="text-[0.6875rem] font-bold text-red-600">
                               {table.capacity}s
                             </span>
                           </div>
                         </div>
                       ))}
                     {occupiedCount === 0 && (
-                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6">
+                      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted py-6">
                         <span className="text-xl">🍽</span>
-                        <p className="mt-1.5 text-[10px] font-bold text-gray-500">
+                        <p className="mt-1.5 text-[0.6875rem] font-bold text-muted-foreground">
                           No active tables
                         </p>
                       </div>
@@ -1028,12 +1042,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
             onClick={() => setShowModifyTables(false)}
             className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm"
           />
-          <div className="fixed bottom-0 right-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl h-[88vh] w-full rounded-t-2xl xl:top-0 xl:h-screen xl:w-[360px] xl:rounded-none xl:border-l xl:border-gray-200">
+          <div className="fixed bottom-0 right-0 z-50 flex flex-col overflow-hidden bg-white shadow-2xl h-[88vh] w-full rounded-t-2xl xl:top-0 xl:h-screen xl:w-[360px] xl:rounded-none xl:border-l xl:border-border">
             {/* HEADER */}
             <div className="shrink-0 bg-gradient-to-r from-red-500 to-red-600 px-4 py-3 text-white">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-[9px] font-bold uppercase tracking-widest text-red-100">
+                  <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-red-100">
                     Restaurant
                   </p>
                   <h2 className="text-lg font-black mt-0.5">
@@ -1060,13 +1074,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-purple-500">
+                        <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-purple-500">
                           Split Billing
                         </p>
-                        <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                        <h3 className="mt-0.5 text-sm font-black text-foreground">
                           Create Sub Table
                         </h3>
-                        <p className="text-[10px] text-gray-500">
+                        <p className="text-[0.6875rem] text-muted-foreground">
                           Create 1A, 1B temporary tables
                         </p>
                       </div>
@@ -1080,13 +1094,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-orange-500">
+                        <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-orange-500">
                           Family Seating
                         </p>
-                        <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                        <h3 className="mt-0.5 text-sm font-black text-foreground">
                           Merge Tables
                         </h3>
-                        <p className="text-[10px] text-gray-500">
+                        <p className="text-[0.6875rem] text-muted-foreground">
                           Combine multiple tables together
                         </p>
                       </div>
@@ -1100,13 +1114,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-[9px] font-bold uppercase tracking-wide text-blue-500">
+                        <p className="text-[0.6875rem] font-bold uppercase tracking-wide text-blue-500">
                           Guests Moved Seats
                         </p>
-                        <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                        <h3 className="mt-0.5 text-sm font-black text-foreground">
                           Transfer Table
                         </h3>
-                        <p className="text-[10px] text-gray-500">
+                        <p className="text-[0.6875rem] text-muted-foreground">
                           Move an active order to another table
                         </p>
                       </div>
@@ -1117,10 +1131,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {/* TEMP TABLES LIST */}
                   <div className="pt-1">
                     <div className="mb-2 flex items-center justify-between">
-                      <h3 className="text-xs font-black text-gray-900">
+                      <h3 className="text-xs font-black text-foreground">
                         Temporary Tables
                       </h3>
-                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-black text-purple-700">
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[0.6875rem] font-black text-purple-700">
                         {tempCount} active
                       </span>
                     </div>
@@ -1130,7 +1144,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         .map((table) => (
                           <div
                             key={table.id}
-                            className="rounded-xl border border-gray-100 bg-gray-50 p-3"
+                            className="rounded-xl border border-border bg-muted p-3"
                           >
                             <div className="flex items-start justify-between">
                               <div>
@@ -1141,14 +1155,14 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                     ? "Merged"
                                     : "Split"}
                                 </span>
-                                <h4 className="mt-1 text-base font-black text-gray-900">
+                                <h4 className="mt-1 text-base font-black text-foreground">
                                   {table.name}
                                 </h4>
-                                <p className="text-[10px] text-gray-500">
+                                <p className="text-[0.6875rem] text-muted-foreground">
                                   Parent: {table.parentTableIds}
                                 </p>
                               </div>
-                              <span className="text-xs font-black text-gray-700">
+                              <span className="text-xs font-black text-foreground">
                                 {table.capacity} seats
                               </span>
                             </div>
@@ -1159,7 +1173,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                   setShowModifyTables(false);
                                   setStep("MENU");
                                 }}
-                                className="flex-1 rounded-lg bg-white px-2 py-1.5 text-[11px] font-black text-gray-700 shadow-sm border border-gray-200"
+                                className="flex-1 rounded-lg bg-white px-2 py-1.5 text-xs font-black text-foreground shadow-sm border border-border"
                               >
                                 Open
                               </button>
@@ -1172,7 +1186,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                     toast.error(err?.response?.data?.message || "Couldn't delete this table.");
                                   }
                                 }}
-                                className="rounded-lg border border-red-100 bg-red-50 px-2 py-1.5 text-[11px] font-black text-red-600"
+                                className="rounded-lg border border-red-100 bg-red-50 px-2 py-1.5 text-xs font-black text-red-600"
                               >
                                 Delete
                               </button>
@@ -1180,12 +1194,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           </div>
                         ))}
                       {tempCount === 0 && (
-                        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-8">
+                        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted py-8">
                           <span className="text-2xl">🪑</span>
-                          <p className="mt-2 text-xs font-black text-gray-700">
+                          <p className="mt-2 text-xs font-black text-foreground">
                             No Temporary Tables
                           </p>
-                          <p className="mt-0.5 text-[10px] text-gray-400">
+                          <p className="mt-0.5 text-[0.6875rem] text-subtle-foreground">
                             Split & merged tables appear here
                           </p>
                         </div>
@@ -1200,13 +1214,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 <div>
                   <button
                     onClick={() => setFloorAction("HOME")}
-                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm"
+                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-bold text-foreground shadow-sm"
                   >
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
                   <div className="space-y-3">
                     <div>
-                      <label className="mb-1.5 block text-xs font-black text-gray-700">
+                      <label className="mb-1.5 block text-xs font-black text-foreground">
                         Select Parent Table
                       </label>
                       <div className="grid grid-cols-3 gap-1.5">
@@ -1216,12 +1230,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                             <button
                               key={table.id}
                               onClick={() => setSelectedParentTable(table)}
-                              className={`rounded-lg border p-2.5 text-left transition ${selectedParentTable?.id === table.id ? "border-red-500 bg-red-50" : "border-gray-200 bg-white"}`}
+                              className={`rounded-lg border p-2.5 text-left transition ${selectedParentTable?.id === table.id ? "border-red-500 bg-red-50" : "border-border bg-white"}`}
                             >
-                              <h4 className="text-sm font-black text-gray-900">
+                              <h4 className="text-sm font-black text-foreground">
                                 {table.name}
                               </h4>
-                              <p className="text-[10px] text-gray-500">
+                              <p className="text-[0.6875rem] text-muted-foreground">
                                 {table.capacity} seats
                               </p>
                             </button>
@@ -1229,18 +1243,18 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       </div>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-black text-gray-700">
+                      <label className="mb-1 block text-xs font-black text-foreground">
                         Sub Table Name
                       </label>
                       <input
                         value={tempTableName}
                         onChange={(e) => setTempTableName(e.target.value)}
                         placeholder="e.g. 1A"
-                        className="h-9 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-red-400"
+                        className="h-9 w-full rounded-xl border border-border px-3 text-sm font-bold outline-none focus:border-red-400"
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs font-black text-gray-700">
+                      <label className="mb-1 block text-xs font-black text-foreground">
                         Seats
                       </label>
                       <input
@@ -1248,7 +1262,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         onChange={(e) => setTempCapacity(e.target.value)}
                         placeholder="2"
                         type="number"
-                        className="h-9 w-full rounded-xl border border-gray-200 px-3 text-sm font-bold outline-none focus:border-red-400"
+                        className="h-9 w-full rounded-xl border border-border px-3 text-sm font-bold outline-none focus:border-red-400"
                       />
                     </div>
                     <button
@@ -1266,11 +1280,11 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 <div>
                   <button
                     onClick={() => setFloorAction("HOME")}
-                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm"
+                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-bold text-foreground shadow-sm"
                   >
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
-                  <label className="mb-2 block text-xs font-black text-gray-700">
+                  <label className="mb-2 block text-xs font-black text-foreground">
                     Select Tables to Merge
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -1290,17 +1304,17 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                 );
                               else setMergeTables((prev) => [...prev, table]);
                             }}
-                            className={`relative rounded-lg border p-2.5 text-left transition ${active ? "border-orange-500 bg-orange-50" : "border-gray-200 bg-white"}`}
+                            className={`relative rounded-lg border p-2.5 text-left transition ${active ? "border-orange-500 bg-orange-50" : "border-border bg-white"}`}
                           >
                             {active && (
                               <div className="absolute right-1 top-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-orange-500 text-[8px] font-black text-white">
                                 ✓
                               </div>
                             )}
-                            <h4 className="text-sm font-black text-gray-900">
+                            <h4 className="text-sm font-black text-foreground">
                               {table.name}
                             </h4>
-                            <p className="text-[10px] text-gray-500">
+                            <p className="text-[0.6875rem] text-muted-foreground">
                               {table.capacity} seats
                             </p>
                           </button>
@@ -1309,13 +1323,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   </div>
                   {mergeTables.length > 0 && (
                     <div className="mt-3 rounded-xl border border-orange-200 bg-orange-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-wide text-orange-600">
+                      <p className="text-[0.6875rem] font-black uppercase tracking-wide text-orange-600">
                         Preview
                       </p>
-                      <h3 className="mt-0.5 text-lg font-black text-gray-900">
+                      <h3 className="mt-0.5 text-lg font-black text-foreground">
                         {mergeTables.map((t) => t.name).join("-")}
                       </h3>
-                      <p className="text-[10px] text-gray-600">
+                      <p className="text-[0.6875rem] text-muted-foreground">
                         Total:{" "}
                         {mergeTables.reduce((acc, t) => acc + t.capacity, 0)}{" "}
                         seats
@@ -1340,11 +1354,11 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       setTransferFrom(null);
                       setTransferTo(null);
                     }}
-                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700 shadow-sm"
+                    className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-bold text-foreground shadow-sm"
                   >
                     <ArrowLeft className="h-3.5 w-3.5" /> Back
                   </button>
-                  <label className="mb-1.5 block text-xs font-black text-gray-700">
+                  <label className="mb-1.5 block text-xs font-black text-foreground">
                     Move From (occupied table)
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -1354,24 +1368,24 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         <button
                           key={table.id}
                           onClick={() => setTransferFrom(table)}
-                          className={`rounded-lg border p-2.5 text-left transition ${transferFrom?.id === table.id ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                          className={`rounded-lg border p-2.5 text-left transition ${transferFrom?.id === table.id ? "border-blue-500 bg-blue-50" : "border-border bg-white"}`}
                         >
-                          <h4 className="text-sm font-black text-gray-900">
+                          <h4 className="text-sm font-black text-foreground">
                             {table.name}
                           </h4>
-                          <p className="text-[10px] text-gray-500">
+                          <p className="text-[0.6875rem] text-muted-foreground">
                             {table.capacity} seats
                           </p>
                         </button>
                       ))}
                   </div>
                   {tables.filter((t) => !t.isTemporary && getTableColorState(t.id) !== "available").length === 0 && (
-                    <p className="mt-2 text-[11px] text-gray-400">
+                    <p className="mt-2 text-xs text-subtle-foreground">
                       No occupied tables to transfer right now.
                     </p>
                   )}
 
-                  <label className="mb-1.5 mt-4 block text-xs font-black text-gray-700">
+                  <label className="mb-1.5 mt-4 block text-xs font-black text-foreground">
                     Move To (available table)
                   </label>
                   <div className="grid grid-cols-3 gap-1.5">
@@ -1381,12 +1395,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         <button
                           key={table.id}
                           onClick={() => setTransferTo(table)}
-                          className={`rounded-lg border p-2.5 text-left transition ${transferTo?.id === table.id ? "border-blue-500 bg-blue-50" : "border-gray-200 bg-white"}`}
+                          className={`rounded-lg border p-2.5 text-left transition ${transferTo?.id === table.id ? "border-blue-500 bg-blue-50" : "border-border bg-white"}`}
                         >
-                          <h4 className="text-sm font-black text-gray-900">
+                          <h4 className="text-sm font-black text-foreground">
                             {table.name}
                           </h4>
-                          <p className="text-[10px] text-gray-500">
+                          <p className="text-[0.6875rem] text-muted-foreground">
                             {table.capacity} seats
                           </p>
                         </button>
@@ -1395,10 +1409,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
 
                   {transferFrom && transferTo && (
                     <div className="mt-3 rounded-xl border border-blue-200 bg-blue-50 p-3">
-                      <p className="text-[9px] font-black uppercase tracking-wide text-blue-600">
+                      <p className="text-[0.6875rem] font-black uppercase tracking-wide text-blue-600">
                         Preview
                       </p>
-                      <h3 className="mt-0.5 text-sm font-black text-gray-900">
+                      <h3 className="mt-0.5 text-sm font-black text-foreground">
                         {transferFrom.name} → {transferTo.name}
                       </h3>
                     </div>
@@ -1425,18 +1439,18 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               {/* LEFT — MENU AREA */}
               <div className="flex flex-1 min-h-0 flex-col overflow-hidden">
                 {/* Mobile table info */}
-                <div className="xl:hidden shrink-0 mb-1.5 flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 shadow-sm">
+                <div className="xl:hidden shrink-0 mb-1.5 flex items-center justify-between rounded-lg border border-border bg-white px-3 py-2 shadow-sm">
                   <div>
-                    <p className="text-[9px] text-gray-500 uppercase font-bold tracking-wide">
+                    <p className="text-[0.6875rem] text-muted-foreground uppercase font-bold tracking-wide">
                       Selected Table
                     </p>
-                    <h3 className="text-sm font-black text-gray-900 leading-tight">
+                    <h3 className="text-sm font-black text-foreground leading-tight">
                       {selectedTable.name}
                     </h3>
                   </div>
                   <button
                     onClick={() => setSelectedTable(null)}
-                    className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 shadow-sm"
+                    className="rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-bold text-foreground shadow-sm"
                   >
                     Change
                   </button>
@@ -1453,7 +1467,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     </div>
                     <button
                       onClick={handleMarkDelivered}
-                      className="rounded-lg bg-blue-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-blue-600 active:scale-95"
+                      className="rounded-lg bg-blue-500 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-blue-600 active:scale-95"
                     >
                       Mark Delivered
                     </button>
@@ -1470,19 +1484,21 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     activeCart={cart}
                     increaseQty={increaseQty}
                     decreaseQty={decreaseQty}
+                    etaFor={etaFor}
+                    targetMinutes={targetTicketMinutes}
                   />
                 </div>
 
                 {/* Mobile action bar */}
-                <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-gray-100 bg-white px-3 py-2 shadow-sm">
+                <div className="xl:hidden shrink-0 mt-1.5 rounded-xl border border-border bg-white px-3 py-2 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-[9px] text-gray-400 uppercase font-bold tracking-wide">
+                      <p className="text-[0.6875rem] text-subtle-foreground uppercase font-bold tracking-wide">
                         {tableOrders.length > 0
                           ? `${tableOrders.length} KOT · Table total`
                           : "New order"}
                       </p>
-                      <p className="text-sm font-black text-gray-900">
+                      <p className="text-sm font-black text-foreground">
                         {totalItems > 0 && <span>{totalItems} items · </span>}
                         <span className="text-red-600">
                           ₹{tableOrdersTotal + grandTotal}
@@ -1493,7 +1509,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       <button
                         onClick={handleSaveOrder}
                         disabled={loading || submitting || !cartItems.length}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700 shadow-sm disabled:opacity-50"
+                        className="rounded-lg border border-border bg-white px-3 py-1.5 text-xs font-bold text-foreground shadow-sm disabled:opacity-50"
                       >
                         {submitting ? "Saving..." : "Save"}
                       </button>
@@ -1518,38 +1534,38 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
               </div>
 
               {/* RIGHT — DESKTOP ORDER PANEL */}
-              <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="hidden xl:flex xl:w-[240px] xl:shrink-0 xl:flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm">
                 {/* Ready-to-serve banner (desktop) */}
                 {selectedTableColorState === "ready_to_serve" && (
                   <div className="shrink-0 border-b border-blue-200 bg-blue-50 px-3 py-2 flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
                       <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
-                      <p className="text-[11px] font-black text-blue-700">
+                      <p className="text-xs font-black text-blue-700">
                         Ready in kitchen!
                       </p>
                     </div>
                     <button
                       onClick={handleMarkDelivered}
-                      className="rounded-lg bg-blue-500 px-2.5 py-1 text-[10px] font-black text-white transition hover:bg-blue-600"
+                      className="rounded-lg bg-blue-500 px-2.5 py-1 text-[0.6875rem] font-black text-white transition hover:bg-blue-600"
                     >
                       Delivered
                     </button>
                   </div>
                 )}
                 {/* Header */}
-                <div className="shrink-0 border-b border-gray-100 px-3 py-2.5">
+                <div className="shrink-0 border-b border-border px-3 py-2.5">
                   <div className="flex items-start justify-between">
                     <div>
-                      <p className="text-[9px] font-bold uppercase tracking-widest text-gray-400">
+                      <p className="text-[0.6875rem] font-bold uppercase tracking-widest text-subtle-foreground">
                         Current Order
                       </p>
-                      <h3 className="text-base font-black text-gray-900 mt-0.5">
+                      <h3 className="text-base font-black text-foreground mt-0.5">
                         {selectedTable.name}
                       </h3>
                     </div>
                     <button
                       onClick={() => setSelectedTable(null)}
-                      className="rounded-lg border border-gray-200 px-2 py-1 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50"
+                      className="rounded-lg border border-border px-2 py-1 text-xs font-bold text-foreground transition hover:bg-muted"
                     >
                       Change
                     </button>
@@ -1560,7 +1576,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {/* Past KOTs for this table */}
                   {tableOrders.length > 0 && (
                     <div>
-                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                      <p className="mb-1 text-[0.6875rem] font-black uppercase tracking-widest text-subtle-foreground">
                         Order History
                       </p>
                       <div className="space-y-1.5">
@@ -1583,17 +1599,17 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           return (
                             <div
                               key={order.id}
-                              className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-2"
+                              className="rounded-lg border border-border bg-muted px-2.5 py-2"
                             >
                               <div className="flex items-center justify-between mb-1">
-                                <p className="text-[10px] font-black text-gray-700">
+                                <p className="text-[0.6875rem] font-black text-foreground">
                                   KOT #{order.orderNo ?? order.id}
                                 </p>
                                 <div className="flex items-center gap-1">
                                   <button
                                     onClick={() => printKOT(order)}
                                     title="Print KOT"
-                                    className="flex h-5 w-5 items-center justify-center rounded bg-gray-200 text-gray-600 transition hover:bg-red-100 hover:text-red-600"
+                                    className="flex h-5 w-5 items-center justify-center rounded bg-secondary text-muted-foreground transition hover:bg-red-100 hover:text-red-600"
                                   >
                                     <Printer className="h-3 w-3" />
                                   </button>
@@ -1605,12 +1621,12 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               {items.map((item: any) => (
                                 <p
                                   key={item.id}
-                                  className="text-[10px] text-gray-500"
+                                  className="text-[0.6875rem] text-muted-foreground"
                                 >
                                   {item.itemName} × {item.quantity}
                                 </p>
                               ))}
-                              <p className="mt-0.5 text-right text-[10px] font-black text-red-600">
+                              <p className="mt-0.5 text-right text-[0.6875rem] font-black text-red-600">
                                 ₹{order.totalAmount}
                               </p>
                             </div>
@@ -1622,20 +1638,20 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                   {/* Current unsaved cart */}
                   {cartItems.length > 0 && (
                     <div>
-                      <p className="mb-1 text-[9px] font-black uppercase tracking-widest text-gray-400">
+                      <p className="mb-1 text-[0.6875rem] font-black uppercase tracking-widest text-subtle-foreground">
                         New Order
                       </p>
                       <div className="space-y-1.5">
                         {cartItems.map((item: any) => (
                           <div
                             key={item.id}
-                            className="flex items-center justify-between rounded-lg border border-gray-100 bg-white px-2.5 py-2"
+                            className="flex items-center justify-between rounded-lg border border-border bg-white px-2.5 py-2"
                           >
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-semibold text-gray-900">
+                              <p className="truncate text-xs font-semibold text-foreground">
                                 {item.name}
                               </p>
-                              <p className="text-[10px] text-gray-500">
+                              <p className="text-[0.6875rem] text-muted-foreground">
                                 × {cart[item.id]}
                               </p>
                             </div>
@@ -1648,19 +1664,19 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     </div>
                   )}
                   {tableOrders.length === 0 && cartItems.length === 0 && (
-                    <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 p-6 text-center">
+                    <div className="flex h-full flex-col items-center justify-center rounded-xl border border-dashed border-border p-6 text-center">
                       <span className="text-2xl">🛒</span>
-                      <p className="mt-2 text-xs font-bold text-gray-500">
+                      <p className="mt-2 text-xs font-bold text-muted-foreground">
                         No items yet
                       </p>
                     </div>
                   )}
                 </div>
                 {/* Footer */}
-                <div className="shrink-0 border-t border-gray-100 p-2.5 space-y-1.5">
+                <div className="shrink-0 border-t border-border p-2.5 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] text-gray-500">Table Total</p>
+                      <p className="text-[0.6875rem] text-muted-foreground">Table Total</p>
                       <p className="text-lg font-black text-red-600">
                         ₹{tableOrdersTotal + grandTotal}
                       </p>
@@ -1669,13 +1685,13 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       <button
                         onClick={handleSaveOrder}
                         disabled={loading || submitting || !cartItems.length}
-                        className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-gray-700 transition hover:bg-gray-50 disabled:opacity-50"
+                        className="rounded-lg border border-border bg-white px-2.5 py-1.5 text-xs font-bold text-foreground transition hover:bg-muted disabled:opacity-50"
                       >
                         {submitting ? "Saving..." : "Save"}
                       </button>
                       <button
                         onClick={() => setStep("CART")}
-                        className="rounded-lg bg-red-500 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm transition hover:bg-red-600"
+                        className="rounded-lg bg-red-500 px-2.5 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-red-600"
                       >
                         Cart
                       </button>
@@ -1696,22 +1712,22 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
           )}
 
           {step === "CART" && (
-            <div className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+            <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border bg-white shadow-sm">
               {/* Header */}
-              <div className="shrink-0 border-b border-gray-100 px-3 py-2">
+              <div className="shrink-0 border-b border-border px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setStep("MENU")}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-white text-muted-foreground transition hover:bg-muted"
                     >
                       <ArrowLeft className="h-3.5 w-3.5" />
                     </button>
                     <div>
-                      <h2 className="text-sm font-black text-gray-900">
+                      <h2 className="text-sm font-black text-foreground">
                         {selectedTable.name} — Orders
                       </h2>
-                      <p className="text-[10px] text-gray-500">
+                      <p className="text-[0.6875rem] text-muted-foreground">
                         {tableOrders.length} KOT
                         {tableOrders.length !== 1 ? "s" : ""} placed
                         {cartItems.length > 0 &&
@@ -1723,7 +1739,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                     <button
                       onClick={handleGoToBilling}
                       disabled={submitting}
-                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-[11px] font-black text-white shadow-sm transition hover:bg-emerald-600 disabled:opacity-50"
+                      className="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-black text-white shadow-sm transition hover:bg-emerald-600 disabled:opacity-50"
                     >
                       Generate Bill
                     </button>
@@ -1736,7 +1752,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {/* ── Placed KOTs ── */}
                 {tableOrders.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-gray-400">
+                    <p className="text-[0.6875rem] font-black uppercase tracking-widest text-subtle-foreground">
                       Placed Orders
                     </p>
                     {tableOrdersWithTimes.map(({ order, placedAt, doneAt, delivAt }) => {
@@ -1760,7 +1776,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                       return (
                         <div
                           key={order.id}
-                          className="overflow-hidden rounded-xl border border-gray-200"
+                          className="overflow-hidden rounded-xl border border-border"
                         >
                           {/* KOT header */}
                           <div
@@ -1773,10 +1789,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                             }`}
                           >
                             <div>
-                              <p className="text-xs font-black text-gray-900">
+                              <p className="text-xs font-black text-foreground">
                                 KOT #{kotNo}
                               </p>
-                              <p className="text-[10px] text-gray-500">
+                              <p className="text-[0.6875rem] text-muted-foreground">
                                 Ordered at {placedAt}
                               </p>
                             </div>
@@ -1784,7 +1800,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               <button
                                 onClick={() => printKOT(order)}
                                 title="Print KOT"
-                                className="flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] font-bold text-gray-700 transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
+                                className="flex items-center gap-1 rounded-lg border border-border bg-white px-2 py-1 text-[0.6875rem] font-bold text-foreground transition hover:border-red-300 hover:bg-red-50 hover:text-red-600"
                               >
                                 <Printer className="h-3 w-3" /> KOT
                               </button>
@@ -1808,7 +1824,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                 >
                                   <div className="flex items-center gap-1.5 min-w-0">
                                     <p
-                                      className={`text-xs font-semibold ${isCancelled ? "text-gray-400 line-through" : "text-gray-800"}`}
+                                      className={`text-xs font-semibold ${isCancelled ? "text-subtle-foreground line-through" : "text-foreground"}`}
                                     >
                                       {item.itemName}
                                     </p>
@@ -1824,7 +1840,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1.5 shrink-0">
-                                    <span className="text-[10px] text-gray-500">
+                                    <span className="text-[0.6875rem] text-muted-foreground">
                                       × {item.quantity}
                                     </span>
                                     <span className="text-xs font-black text-red-600">
@@ -1838,9 +1854,9 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                                           handleRequestCancel(item.id)
                                         }
                                         title="Request cancellation"
-                                        className="flex h-5 w-5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition hover:bg-red-100 hover:text-red-500"
+                                        className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-subtle-foreground transition hover:bg-red-100 hover:text-red-500"
                                       >
-                                        <span className="text-[11px] font-black leading-none">
+                                        <span className="text-xs font-black leading-none">
                                           ×
                                         </span>
                                       </button>
@@ -1852,8 +1868,8 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                           </div>
 
                           {/* Timeline + total */}
-                          <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-3 py-1.5">
-                            <div className="flex items-center gap-2.5 text-[9px] text-gray-400">
+                          <div className="flex items-center justify-between border-t border-border bg-muted px-3 py-1.5">
+                            <div className="flex items-center gap-2.5 text-[0.6875rem] text-subtle-foreground">
                               <span>📋 {placedAt}</span>
                               {doneAt && (
                                 <span className="text-blue-500">
@@ -1879,7 +1895,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {/* ── Unsaved cart items ── */}
                 {cartItems.length > 0 && (
                   <div className="space-y-1.5">
-                    <p className="text-[9px] font-black uppercase tracking-widest text-amber-600">
+                    <p className="text-[0.6875rem] font-black uppercase tracking-widest text-amber-600">
                       New Order — Not Yet Saved
                     </p>
                     <div className="overflow-hidden rounded-xl border-2 border-dashed border-amber-300">
@@ -1890,10 +1906,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                         >
                           <div className="flex items-center gap-2.5">
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-bold text-gray-900">
+                              <p className="truncate text-xs font-bold text-foreground">
                                 {item.name}
                               </p>
-                              <p className="text-[10px] text-gray-500">
+                              <p className="text-[0.6875rem] text-muted-foreground">
                                 ₹{item.price} each
                               </p>
                             </div>
@@ -1919,7 +1935,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                             </p>
                           </div>
                           {(cartAddOns[item.id]?.length || 0) > 0 && (
-                            <p className="mt-1 text-[10px] font-semibold text-violet-600">
+                            <p className="mt-1 text-[0.6875rem] font-semibold text-violet-600">
                               + {cartAddOns[item.id].map((a) => a.name).join(", ")}
                             </p>
                           )}
@@ -1929,7 +1945,7 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                               setCartNotes((prev) => ({ ...prev, [item.id]: e.target.value }))
                             }
                             placeholder="Add note (e.g. no onions)"
-                            className="mt-1.5 w-full rounded-lg border border-gray-200 bg-white px-2 py-1 text-[10px] outline-none transition focus:border-red-300"
+                            className="mt-1.5 w-full rounded-lg border border-border bg-white px-2 py-1 text-[0.6875rem] outline-none transition focus:border-red-300"
                           />
                         </div>
                       ))}
@@ -1959,10 +1975,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
                 {tableOrders.length === 0 && cartItems.length === 0 && (
                   <div className="flex h-full flex-col items-center justify-center py-12 text-center">
                     <span className="text-3xl">🛒</span>
-                    <p className="mt-2 text-sm font-bold text-gray-500">
+                    <p className="mt-2 text-sm font-bold text-muted-foreground">
                       No orders yet
                     </p>
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-subtle-foreground">
                       Add items from the menu
                     </p>
                   </div>
@@ -1971,10 +1987,10 @@ ${items.map((i: any) => `<tr><td class="n" style="font-size:14px;font-weight:bol
 
               {/* Footer summary */}
               {(tableOrders.length > 0 || cartItems.length > 0) && (
-                <div className="shrink-0 border-t border-gray-100 bg-white px-3 py-2.5">
+                <div className="shrink-0 border-t border-border bg-white px-3 py-2.5">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-[10px] text-gray-500">Table Total</p>
+                      <p className="text-[0.6875rem] text-muted-foreground">Table Total</p>
                       <p className="text-xl font-black text-red-600">
                         ₹{tableOrdersTotal + grandTotal}
                       </p>

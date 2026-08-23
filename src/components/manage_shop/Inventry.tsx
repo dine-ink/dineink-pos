@@ -204,17 +204,17 @@ export default function Inventory() {
       {/* PAGE */}
       <div className="p-6 h-full">
         {/* CARD */}
-        <div className="bg-white border border-gray-200 rounded-2xl shadow-sm h-full flex flex-col overflow-hidden">
+        <div className="bg-white border border-border rounded-2xl shadow-sm h-full flex flex-col overflow-hidden">
           {/* HEADER */}
-          <div className="p-5 border-b border-gray-100 shrink-0">
+          <div className="p-5 border-b border-border shrink-0">
             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
               {/* TITLE */}
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">
+                <h1 className="text-2xl font-bold text-foreground">
                   Update Inventory
                 </h1>
 
-                <p className="text-gray-500 mt-2 text-sm">
+                <p className="text-muted-foreground mt-2 text-sm">
                   View and manage all inventory updates.
                 </p>
               </div>
@@ -224,7 +224,7 @@ export default function Inventory() {
                 {/* SEARCH */}
                 <div className="relative w-full md:w-[320px]">
                   <Search
-                    className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-subtle-foreground"
                     size={18}
                   />
 
@@ -233,7 +233,7 @@ export default function Inventory() {
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search inventory..."
-                    className="w-full h-11 rounded-xl border border-gray-200 pl-12 pr-4 outline-none focus:border-red-500"
+                    className="w-full h-11 rounded-xl border border-border pl-12 pr-4 outline-none focus:border-red-500"
                   />
                 </div>
 
@@ -262,7 +262,7 @@ export default function Inventory() {
                 {lowStockIngredients.map((ing: any) => (
                   <span
                     key={ing.id}
-                    className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-800"
+                    className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800"
                   >
                     {ing.name}: {ing.quantity ?? 0} {ing.unit || ""} left
                   </span>
@@ -293,7 +293,7 @@ export default function Inventory() {
                   {paginatedItems.map((item: any) => {
                     const isEditing = editRowId === item.id;
                     return (
-                      <div key={item.id} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                      <div key={item.id} className="rounded-xl border border-border bg-white p-3 shadow-sm">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
                             {isEditing ? (
@@ -308,9 +308,9 @@ export default function Inventory() {
                                 ))}
                               </select>
                             ) : (
-                              <h3 className="truncate text-sm font-bold text-gray-900">{item.ingredient?.name}</h3>
+                              <h3 className="truncate text-sm font-bold text-foreground">{item.ingredient?.name}</h3>
                             )}
-                            <p className="mt-0.5 text-[11px] text-gray-400">{formatShortDate(item.createdAt)}</p>
+                            <p className="mt-0.5 text-xs text-subtle-foreground">{formatShortDate(item.createdAt)}</p>
                           </div>
                           <div className="flex shrink-0 items-center gap-2.5">
                             {isEditing ? (
@@ -329,7 +329,7 @@ export default function Inventory() {
                                       setEditRowId(null);
                                     }}
                                     aria-label="Discard new row"
-                                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-500"
+                                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-input text-muted-foreground"
                                   >
                                     ×
                                   </button>
@@ -342,7 +342,7 @@ export default function Inventory() {
                                   disabled={item.queuedOffline}
                                   aria-label="Edit adjustment"
                                   title={item.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
-                                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-300 text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="flex h-10 w-10 items-center justify-center rounded-xl border border-input text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   <Pencil size={16} />
                                 </button>
@@ -361,7 +361,7 @@ export default function Inventory() {
                         </div>
 
                         {isEditing ? (
-                          <div className="mt-2.5 space-y-2 border-t border-gray-100 pt-2.5">
+                          <div className="mt-2.5 space-y-2 border-t border-border pt-2.5">
                             <div className="grid grid-cols-2 gap-2">
                               <input
                                 type="number"
@@ -388,16 +388,16 @@ export default function Inventory() {
                             />
                           </div>
                         ) : (
-                          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-2.5">
+                          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <StatusBadge tone="bg-gray-100 text-gray-600" size="md">
+                              <StatusBadge tone="bg-secondary text-muted-foreground" size="md">
                                 {item.adjustmentType}
                               </StatusBadge>
                               {item.reason && (
-                                <span className="text-[11px] text-gray-500">{item.reason}</span>
+                                <span className="text-xs text-muted-foreground">{item.reason}</span>
                               )}
                             </div>
-                            <p className="text-sm font-black text-gray-900">Qty: {item.quantity}</p>
+                            <p className="text-sm font-black text-foreground">Qty: {item.quantity}</p>
                           </div>
                         )}
                       </div>
@@ -410,7 +410,7 @@ export default function Inventory() {
               <div className="hidden xl:block flex-1 overflow-auto min-h-0">
             <table className="w-full min-w-[1200px] border-collapse">
               {/* TABLE HEAD */}
-              <thead className="bg-[#FAFAFA] border-b border-gray-100 sticky top-0 z-10">
+              <thead className="bg-[#FAFAFA] border-b border-border sticky top-0 z-10">
                 <tr className="text-left">
                   <th className="px-3 py-3 text-xs font-bold">Date</th>
 
@@ -438,7 +438,7 @@ export default function Inventory() {
                   return (
                     <tr
                       key={item.id}
-                      className="border-b border-gray-100 hover:bg-gray-50"
+                      className="border-b border-border hover:bg-muted"
                     >
                       {/* DATE */}
                       <td className="px-3 py-2 text-xs whitespace-nowrap">
@@ -543,7 +543,7 @@ export default function Inventory() {
                               <button
                                 onClick={() => handleSave(item)}
                                 disabled={loading}
-                                className="h-8 px-3 rounded-lg bg-green-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="h-10 rounded-control bg-success px-3.5 text-sm font-semibold text-success-foreground disabled:cursor-not-allowed disabled:opacity-50"
                               >
                                 Save
                               </button>
@@ -559,9 +559,10 @@ export default function Inventory() {
 
                                     setEditRowId(null);
                                   }}
-                                  className="h-8 px-3 rounded-lg border border-gray-300"
+                                  aria-label="Discard new row"
+                                  className="h-10 rounded-control border border-input px-3.5 text-sm font-semibold text-muted-foreground"
                                 >
-                                  X
+                                  ✕
                                 </button>
                               )}
                             </>
@@ -572,9 +573,9 @@ export default function Inventory() {
                                 disabled={item.queuedOffline}
                                 aria-label="Edit adjustment"
                                 title={item.queuedOffline ? "Waiting to sync before this can be edited" : undefined}
-                                className="h-8 w-8 rounded-lg border border-gray-300 text-gray-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex h-10 w-10 items-center justify-center rounded-control border border-input text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Pencil size={14} />
+                                <Pencil size={16} />
                               </button>
 
                               <button
@@ -582,9 +583,9 @@ export default function Inventory() {
                                 disabled={loading || item.queuedOffline}
                                 aria-label="Delete adjustment"
                                 title={item.queuedOffline ? "Waiting to sync before this can be deleted" : undefined}
-                                className="h-8 w-8 rounded-lg border border-red-500 text-red-600 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="flex h-10 w-10 items-center justify-center rounded-control border border-destructive/40 text-destructive disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={16} />
                               </button>
                             </>
                           )}
@@ -600,7 +601,7 @@ export default function Inventory() {
           )}
 
           {/* FOOTER */}
-          <div className="p-6 border-t border-gray-100 flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
+          <div className="p-6 border-t border-border flex flex-col md:flex-row md:items-center md:justify-between gap-4 shrink-0">
             <p className="text-[#15163A] text-sm font-medium">
               Showing {filteredInventory.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1} to{" "}
               {Math.min(currentPage * itemsPerPage, filteredInventory.length)} of{" "}
@@ -612,7 +613,7 @@ export default function Inventory() {
               <button
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="h-10 w-10 rounded-xl bg-gray-100 text-gray-500 text-xl disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 w-10 rounded-xl bg-secondary text-muted-foreground text-xl disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ‹
               </button>
@@ -624,7 +625,7 @@ export default function Inventory() {
               <button
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage >= totalPages}
-                className="h-10 w-10 rounded-xl bg-gray-100 text-gray-500 text-xl disabled:opacity-40 disabled:cursor-not-allowed"
+                className="h-10 w-10 rounded-xl bg-secondary text-muted-foreground text-xl disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 ›
               </button>

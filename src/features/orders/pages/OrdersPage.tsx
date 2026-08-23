@@ -21,14 +21,14 @@ const TYPE_BADGE: Record<string, string> = {
   ZOMATO: "bg-red-100 text-red-700",
   TAKE_AWAY: "bg-purple-100 text-purple-700",
 };
-const getTypeBadge = (t: string) => TYPE_BADGE[t] || "bg-gray-100 text-gray-700";
+const getTypeBadge = (t: string) => TYPE_BADGE[t] || "bg-secondary text-secondary-foreground";
 const getPayBadge = (s: string) =>
   s === "PAID"
     ? "bg-emerald-100 text-emerald-700"
     : s === "PARTIAL"
       ? "bg-yellow-100 text-yellow-700"
       : s === "CANCELLED"
-        ? "bg-gray-200 text-gray-500"
+        ? "bg-secondary text-muted-foreground"
         : "bg-red-100 text-red-700";
 const getStatusBadge = (s: string) =>
   s === "COMPLETED" ? "bg-emerald-100 text-emerald-700"
@@ -60,11 +60,11 @@ function OrderMobileCardBase({
   onDirectPrint, onCompleteOrder, onOpenRefund, onVoidBill,
 }: OrderRowProps) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+    <div className="rounded-xl border border-border bg-white p-3 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <p className="text-xs font-black text-gray-900">{order.orderNo}</p>
-          <p className="text-[10px] text-gray-500">
+          <p className="text-xs font-black text-foreground">{order.orderNo}</p>
+          <p className="text-[0.6875rem] text-muted-foreground">
             {order.createdAt ? formatTime(order.createdAt) : "—"} · {order.table || "—"}
           </p>
         </div>
@@ -74,12 +74,12 @@ function OrderMobileCardBase({
       </div>
       <div className="mt-2 flex items-center justify-between">
         <div>
-          <p className="text-[10px] text-gray-500">Customer</p>
-          <p className="text-xs font-bold text-gray-900">{customerDisplay(order)}</p>
+          <p className="text-[0.6875rem] text-muted-foreground">Customer</p>
+          <p className="text-xs font-bold text-foreground">{customerDisplay(order)}</p>
         </div>
         <p className="text-lg font-black text-red-600">{formatCurrency(order.total)}</p>
       </div>
-      <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+      <div className="mt-2 flex items-center justify-between gap-2 border-t border-border pt-2">
         <div className="flex flex-wrap gap-1">
           <StatusBadge tone={getPayBadge(order.paymentStatus)} size="sm">
             {order.paymentStatus || "UNPAID"}
@@ -93,26 +93,29 @@ function OrderMobileCardBase({
             onClick={() => onDirectPrint(order)}
             disabled={!canPrint}
             title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
-            className={`flex h-9 w-9 items-center justify-center rounded-lg transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
-            <PrinterIcon className="h-3.5 w-3.5" />
+            className={`flex h-11 w-11 items-center justify-center rounded-control transition ${canPrint ? "bg-red-50 text-primary hover:brightness-95" : "bg-secondary text-subtle-foreground cursor-not-allowed"}`}>
+            <PrinterIcon className="h-4 w-4" />
           </button>
+          {/* Complete / Refund / Void all move money, and they're pressed on a
+              tablet mid-service — sized as real targets rather than the ~26px
+              they were, and spaced so Void isn't a neighbour-miss from Refund. */}
           {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
             <button onClick={() => onCompleteOrder(order)}
               disabled={completing === order.id}
-              className="rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
-              {completing === order.id ? "..." : "Complete"}
+              className="h-11 rounded-control bg-success px-3.5 text-xs font-bold text-success-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+              {completing === order.id ? "…" : "Complete"}
             </button>
           )}
           {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
             <button onClick={() => onOpenRefund(order)}
-              className="rounded-lg bg-amber-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-amber-600">
+              className="h-11 rounded-control bg-warning px-3.5 text-xs font-bold text-warning-foreground transition hover:brightness-110">
               Refund
             </button>
           )}
           {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
             <button onClick={() => onVoidBill(order)}
               disabled={voiding === order.id}
-              className="ml-1 rounded-lg bg-red-500 px-2.5 py-1.5 text-[10px] font-black text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
+              className="ml-1.5 h-11 rounded-control border border-destructive/40 bg-card px-3.5 text-xs font-bold text-destructive transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60">
               {voiding === order.id ? "Voiding…" : "Void"}
             </button>
           )}
@@ -128,15 +131,15 @@ function OrderTableRowBase({
   onDirectPrint, onCompleteOrder, onOpenRefund, onVoidBill,
 }: OrderRowProps & { index: number }) {
   return (
-    <tr className={`border-b border-gray-100 transition hover:bg-red-50/50 ${index % 2 === 0 ? "bg-white" : "bg-gray-50/40"}`}>
-      <td className="px-3 py-2 text-xs font-bold text-gray-800">{order.orderNo}</td>
-      <td className="px-3 py-2 text-xs text-gray-600">{order.createdAt ? formatTime(order.createdAt) : "—"}</td>
-      <td className="px-3 py-2 text-xs font-semibold text-gray-900">{customerDisplay(order)}</td>
+    <tr className={`border-b border-border transition hover:bg-red-50/50 ${index % 2 === 0 ? "bg-card" : "bg-muted/40"}`}>
+      <td className="px-3 py-2 text-xs font-bold text-foreground">{order.orderNo}</td>
+      <td className="px-3 py-2 text-xs text-muted-foreground">{order.createdAt ? formatTime(order.createdAt) : "—"}</td>
+      <td className="px-3 py-2 text-xs font-semibold text-foreground">{customerDisplay(order)}</td>
       <td className="px-3 py-2">
         <StatusBadge tone={getTypeBadge(order.orderType)} size="md">{order.orderType}</StatusBadge>
       </td>
-      <td className="px-3 py-2 text-xs text-gray-600">{order.table || "—"}</td>
-      <td className="px-3 py-2 text-xs text-gray-600">{order.items?.length || 0} items</td>
+      <td className="px-3 py-2 text-xs text-muted-foreground">{order.table || "—"}</td>
+      <td className="px-3 py-2 text-xs text-muted-foreground">{order.items?.length || 0} items</td>
       <td className="px-3 py-2">
         <StatusBadge tone="bg-emerald-100 text-emerald-700" size="md">{order.paymentMethod || "—"}</StatusBadge>
       </td>
@@ -155,26 +158,26 @@ function OrderTableRowBase({
             onClick={() => onDirectPrint(order)}
             disabled={!canPrint}
             title={!canPrint ? "No printer configured" : order.orderStatus === "COMPLETED" ? "Reprint Bill" : "Print Bill"}
-            className={`flex h-6 w-6 items-center justify-center rounded-md transition ${canPrint ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-gray-100 text-gray-300 cursor-not-allowed"}`}>
-            <PrinterIcon className="h-3 w-3" />
+            className={`flex h-9 w-9 items-center justify-center rounded-control transition ${canPrint ? "bg-red-50 text-primary hover:brightness-95" : "bg-secondary text-subtle-foreground cursor-not-allowed"}`}>
+            <PrinterIcon className="h-4 w-4" />
           </button>
           {order.source === "RUNNING_ORDER" && order.orderStatus !== "COMPLETED" && (
             <button onClick={() => onCompleteOrder(order)}
               disabled={completing === order.id}
-              className="rounded-md bg-emerald-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
-              {completing === order.id ? "..." : "Complete"}
+              className="h-9 rounded-control bg-success px-3 text-xs font-bold text-success-foreground transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60">
+              {completing === order.id ? "…" : "Complete"}
             </button>
           )}
           {canRefund && order.source === "BILL" && order.paymentStatus === "PAID" && (
             <button onClick={() => onOpenRefund(order)}
-              className="rounded-md bg-amber-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-amber-600">
+              className="h-9 rounded-control bg-warning px-3 text-xs font-bold text-warning-foreground transition hover:brightness-110">
               Refund
             </button>
           )}
           {canVoid && order.source === "BILL" && order.paymentStatus !== "CANCELLED" && (
             <button onClick={() => onVoidBill(order)}
               disabled={voiding === order.id}
-              className="ml-1 rounded-md bg-red-500 px-2 py-1 text-[10px] font-bold text-white transition hover:bg-red-600 disabled:cursor-not-allowed disabled:opacity-60">
+              className="ml-1.5 h-9 rounded-control border border-destructive/40 bg-card px-3 text-xs font-bold text-destructive transition hover:bg-destructive/10 disabled:cursor-not-allowed disabled:opacity-60">
               {voiding === order.id ? "Voiding…" : "Void"}
             </button>
           )}
@@ -447,25 +450,25 @@ export default function OrderHistory() {
   if (loading) return <PageLoader />;
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-gray-50">
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       {/* HEADER */}
-      <div className="shrink-0 bg-white border-b border-gray-200 px-3 py-2">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h1 className="text-base font-black tracking-tight text-gray-900">Order History</h1>
-            <p className="text-[10px] text-gray-500">{filteredOrders.length} records</p>
+      <div className="shrink-0 border-b border-border bg-card px-3 py-3 sm:px-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold tracking-tight text-foreground">Order History</h1>
+            <p className="text-xs text-muted-foreground tnum">{filteredOrders.length} records</p>
           </div>
-          <div className="relative w-full sm:w-48">
-            <MagnifyingGlassIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+          <div className="relative w-full sm:w-64">
+            <MagnifyingGlassIcon className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-subtle-foreground" />
             <input value={search} onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search order or customer..."
-              className="h-8 w-full rounded-lg border border-gray-200 bg-gray-50 pl-8 pr-3 text-xs outline-none transition focus:border-red-300 focus:bg-white" />
+              placeholder="Search order or customer…"
+              className="h-11 w-full rounded-control border border-input bg-card pr-3 pl-9 text-sm outline-none transition-colors placeholder:text-subtle-foreground focus:border-primary" />
           </div>
         </div>
       </div>
 
       {/* CONTENT */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-2 xl:p-3">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
         {/* MOBILE CARDS */}
         <div className="space-y-2 xl:hidden">
           {filteredOrders.length === 0 && (
@@ -489,14 +492,14 @@ export default function OrderHistory() {
         </div>
 
         {/* DESKTOP TABLE */}
-        <div className="hidden xl:block overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="hidden overflow-hidden rounded-card border border-border bg-card shadow-sm xl:block">
           <div className="overflow-auto max-h-[calc(100vh-130px)]">
             <table className="w-full border-collapse">
-              <thead className="sticky top-0 z-10 bg-gray-50">
-                <tr className="border-b border-gray-200">
+              <thead className="sticky top-0 z-10 bg-muted/60">
+                <tr className="border-b border-border">
                   {["Order", "Time", "Customer", "Type", "Table", "Items", "Payment", "Amount", "Pay Status", "Order Status", "Actions"]
                     .map((h, i) => (
-                      <th key={h} className={`px-3 py-2 text-[10px] font-black uppercase tracking-wider text-gray-500 ${i === 7 ? "text-right" : "text-left"}`}>
+                      <th key={h} className={`px-3 py-2 text-[0.6875rem] font-black uppercase tracking-wider text-muted-foreground ${i === 7 ? "text-right" : "text-left"}`}>
                         {h}
                       </th>
                     ))}
@@ -540,22 +543,22 @@ export default function OrderHistory() {
         onConfirm={handleSubmitRefund}
         onCancel={() => setRefundOrder(null)}
       >
-        <label className="mt-3 block text-[11px] font-bold text-gray-700">Refund Amount (₹)</label>
+        <label className="mt-3 block text-xs font-bold text-foreground">Refund Amount (₹)</label>
         <input
           type="number"
           value={refundAmount}
           onChange={(e) => setRefundAmount(e.target.value)}
           placeholder="0.00"
-          className="mt-1 h-9 w-full rounded-lg border border-gray-200 px-3 text-sm outline-none focus:border-amber-400"
+          className="mt-1 h-11 w-full rounded-control border border-input px-3 text-sm outline-none focus:border-primary"
         />
 
-        <label className="mt-3 block text-[11px] font-bold text-gray-700">Reason (optional)</label>
+        <label className="mt-3 block text-xs font-bold text-foreground">Reason (optional)</label>
         <textarea
           value={refundReason}
           onChange={(e) => setRefundReason(e.target.value)}
           placeholder="e.g. customer complaint about a dish"
           rows={2}
-          className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-amber-400"
+          className="mt-1 w-full rounded-control border border-input px-3 py-2.5 text-sm outline-none focus:border-primary"
         />
       </ConfirmDialog>
 

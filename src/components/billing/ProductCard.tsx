@@ -1,70 +1,117 @@
 import { memo } from "react";
-import { Plus, Minus } from "lucide-react";
+import { Plus, Minus, Clock } from "lucide-react";
+import type { DishEstimate } from "@/hooks/useKitchenQueue";
 
 type Props = {
   product: any;
   qty: number;
   increaseQty: any;
   decreaseQty: any;
+  /**
+   * Live wait for this dish given what's already cooking. Optional and
+   * omitted entirely when the kitchen isn't configured or this dish has no
+   * labor standard — a missing badge is honest, a guessed one isn't.
+   */
+  eta?: DishEstimate | null;
+  /** Ticket-time target; a dish over it is flagged so the captain can steer. */
+  targetMinutes?: number;
 };
 
-function ProductCard({
-  product,
-  qty,
-  increaseQty,
-  decreaseQty,
-}: Props) {
+/**
+ * The most-tapped control in the app, so it's sized for a finger rather than a
+ * cursor. The previous version used a 28px Add button with 20px +/− steppers
+ * inside it — comfortable with a mouse, and genuinely unreliable on a phone or
+ * a greasy tablet, which is where orders are actually taken. Add is now a full
+ * 44px row and each stepper is 36px with its own tap padding.
+ *
+ * Behaviour is unchanged: same increaseQty/decreaseQty handlers, same
+ * isAvailable gate, same memo.
+ */
+function ProductCard({ product, qty, increaseQty, decreaseQty, eta, targetMinutes = 30 }: Props) {
   const unavailable = product.isAvailable === false;
+  const slow = !!eta && eta.minutes > targetMinutes;
 
   return (
-    <div className={`relative flex flex-col justify-between rounded-xl border p-2.5 shadow-sm transition-shadow ${unavailable ? "border-gray-100 bg-gray-50 opacity-60" : "border-gray-100 bg-white hover:shadow-md"}`}>
+    <div
+      className={`relative flex flex-col justify-between rounded-card border p-2.5 shadow-sm transition-shadow ${
+        unavailable ? "border-border bg-muted opacity-70" : "border-border bg-card hover:shadow-md"
+      }`}
+    >
       {/* SOLD OUT BADGE */}
       {unavailable && (
-        <span className="absolute right-2 top-2 rounded-md bg-gray-200 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+        <span className="absolute top-2 right-2 rounded-md bg-secondary px-1.5 py-0.5 text-[0.5625rem] font-bold tracking-wide text-muted-foreground uppercase">
           Sold Out
         </span>
       )}
 
       {/* NAME & PRICE */}
       <div>
-        <h3 className={`line-clamp-2 text-xs font-semibold leading-tight ${unavailable ? "text-gray-400" : "text-gray-900"}`}>
+        <h3
+          className={`line-clamp-2 text-[0.8125rem] leading-tight font-semibold ${
+            unavailable ? "text-subtle-foreground" : "text-foreground"
+          }`}
+        >
           {product.name}
         </h3>
-        <p className={`mt-1 text-sm font-black ${unavailable ? "text-gray-400" : "text-red-600"}`}>
-          ₹{product.price}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+          <p
+            className={`text-base font-bold tnum ${
+              unavailable ? "text-subtle-foreground" : "text-primary"
+            }`}
+          >
+            ₹{product.price}
+          </p>
+          {eta && !unavailable && (
+            <span
+              // Amber past the ticket-time target: the point isn't to shame the
+              // kitchen, it's to let the captain suggest something faster.
+              title={
+                eta.equipmentBound
+                  ? `${eta.bindingStation} is at its equipment limit — ${eta.queueMinutes} min of queue ahead`
+                  : `${eta.queueMinutes} min waiting at ${eta.bindingStation}, then this dish`
+              }
+              className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[0.6875rem] font-bold tnum ${
+                slow ? "bg-warning-muted text-warning" : "bg-muted text-muted-foreground"
+              }`}
+            >
+              <Clock className="h-3 w-3" />
+              {eta.minutes}m
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ADD / STEPPER */}
-      <div className="mt-2">
+      <div className="mt-2.5">
         {unavailable ? (
-          <div className="flex h-7 w-full items-center justify-center rounded-lg bg-gray-200">
-            <span className="text-[11px] font-semibold text-gray-400">Unavailable</span>
+          <div className="flex h-11 w-full items-center justify-center rounded-control bg-secondary">
+            <span className="text-xs font-semibold text-muted-foreground">Unavailable</span>
           </div>
         ) : qty === 0 ? (
           <button
             onClick={() => increaseQty(product.id)}
-            className="flex h-7 w-full items-center justify-center gap-1 rounded-lg bg-red-500 text-white transition active:scale-95"
+            aria-label={`Add ${product.name}`}
+            className="flex h-11 w-full items-center justify-center gap-1.5 rounded-control bg-primary text-primary-foreground transition-transform active:scale-95"
           >
-            <Plus className="h-3 w-3" strokeWidth={2.5} />
-            <span className="text-[11px] font-bold">Add</span>
+            <Plus className="h-4 w-4" strokeWidth={2.5} />
+            <span className="text-sm font-bold">Add</span>
           </button>
         ) : (
-          <div className="flex h-7 items-center justify-between rounded-lg bg-red-500 px-1 text-white">
+          <div className="flex h-11 items-center justify-between rounded-control bg-primary px-1 text-primary-foreground">
             <button
               onClick={() => decreaseQty(product.id)}
-              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 transition active:scale-90"
+              aria-label={`Remove one ${product.name}`}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 transition-transform active:scale-90"
             >
-              <Minus className="h-3 w-3" strokeWidth={2.5} />
+              <Minus className="h-4 w-4" strokeWidth={2.5} />
             </button>
-            <span className="min-w-[20px] text-center text-xs font-black">
-              {qty}
-            </span>
+            <span className="min-w-8 text-center text-base font-bold tnum">{qty}</span>
             <button
               onClick={() => increaseQty(product.id)}
-              className="flex h-5 w-5 items-center justify-center rounded-md bg-white/20 transition active:scale-90"
+              aria-label={`Add one more ${product.name}`}
+              className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/20 transition-transform active:scale-90"
             >
-              <Plus className="h-3 w-3" strokeWidth={2.5} />
+              <Plus className="h-4 w-4" strokeWidth={2.5} />
             </button>
           </div>
         )}

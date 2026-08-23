@@ -17,7 +17,7 @@ function AccordionItem({
   return (
     <AccordionPrimitive.Item
       data-slot="accordion-item"
-      className={cn("border-b border-gray-100 last:border-b-0", className)}
+      className={cn("border-b border-border last:border-b-0", className)}
       {...props}
     />
   )
@@ -33,13 +33,15 @@ function AccordionTrigger({
       <AccordionPrimitive.Trigger
         data-slot="accordion-trigger"
         className={cn(
-          "flex flex-1 items-center justify-between gap-2 py-4 px-3 text-left text-sm font-black text-gray-900 transition-all outline-none hover:bg-gray-50 active:bg-gray-100 [&[data-state=open]>svg]:rotate-180",
+          // min-h-14 keeps the whole category row a comfortable tap target;
+          // the padding alone left it short on a phone.
+          "flex min-h-14 flex-1 items-center justify-between gap-2 px-3 py-3 text-left text-sm font-bold text-foreground transition-colors outline-none hover:bg-muted active:bg-secondary [&[data-state=open]>svg]:rotate-180",
           className
         )}
         {...props}
       >
         {children}
-        <ChevronDown className="h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200" />
+        <ChevronDown className="h-4 w-4 shrink-0 text-subtle-foreground transition-transform duration-200" />
       </AccordionPrimitive.Trigger>
     </AccordionPrimitive.Header>
   )
