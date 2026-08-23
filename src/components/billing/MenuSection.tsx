@@ -28,6 +28,8 @@ type Props = {
 // Swiggy/Zomato-style category browsing: tapping a category expands it in
 // place and collapses whichever was open — `selectedCategory` is reused as
 // "the currently expanded category" instead of "the currently filtered one".
+// An empty string means every category is collapsed, which is the starting
+// state.
 function MenuSection({
   categories,
   selectedCategory,
@@ -46,7 +48,12 @@ function MenuSection({
           type="single"
           collapsible
           value={selectedCategory}
-          onValueChange={(value) => setSelectedCategory(value || selectedCategory)}
+          // Passed straight through, including the empty string radix sends
+          // when the open category is tapped again. The previous
+          // `value || selectedCategory` swallowed exactly that case — so a
+          // category could only ever be closed by opening a different one,
+          // never by tapping its own header.
+          onValueChange={setSelectedCategory}
         >
           {categories.map((category) => {
             const Icon = iconMap[category.iconName] || MdRestaurant;

@@ -50,7 +50,11 @@ export default function NormalBilling({
   branchData,
   addOnMap,
 }: Props) {
-  const [selectedCategory, setSelectedCategory] = useState("Best Sellers");
+  // "" = every category collapsed. Starting closed shows the whole category
+  // list at once, which is faster to scan than landing pre-scrolled inside
+  // one open group. Empty string is also what MenuSection's accordion sends
+  // back when an open category is tapped shut.
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
